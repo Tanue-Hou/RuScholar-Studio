@@ -320,29 +320,63 @@ early_exit_tokens = 6
 early_exit_threshold = 30.0
 
 if model_loaded:
-    with st.sidebar.expander("⚙️ Advanced Scanner Settings", expanded=True):
+    with st.sidebar.expander("⚙️ Advanced Scanner Settings (扫描模式与阈值调优)", expanded=True):
+        st.markdown("### 1. 扫描模式选择")
         scan_mode = st.radio(
             "Scanning Mode (扫描模式)",
             ["Hybrid Probe (混合模式)", "Heuristic Only (仅启发式)", "Early-Exit Only (仅早期退出)"],
-            index=0
+            index=0,
+            help="""
+            - 混合模式 (默认且推荐)：先通过启发式字数/套话过滤句子，对通过者进行模型前缀探测，若自然则提前退出。兼顾算力与精度。
+            - 仅启发式：纯文本分析，通过句长与模板匹配，完全跳过前缀快速退出探测。
+            - 仅早期退出：除公式与超短句外全量送入模型，完全依赖前缀 token 的 PPL 进行早期退出。
+            """
         )
+        st.caption("**💡 混合模式**：最省算力且兼顾精度。**仅启发式**：仅靠字数和套话过滤。**仅早期退出**：纯模型快速退出。")
         
+        st.markdown("### 2. Heuristic 过滤深度 (选项1)")
         heuristic_depth = st.selectbox(
             "Heuristic Filter Depth (过滤深度)",
             ["Smart Probe (均衡模式)", "Deep Scan (全量深检)", "Fast Check (极速模式)"],
-            index=0
+            index=0,
+            help="""
+            - 均衡模式 (默认)：仅扫描中长句（字数 >= smart_words）或包含 AI 套话的句子。
+            - 全量深检：除极短句外，全量句子深度扫描。
+            - 极速模式：仅扫描超长句（字数 >= fast_words）或包含 AI 套话的句子。
+            """
         )
+        st.caption("**💡 均衡模式**：均衡中长句与套话句。**全量深检**：除极短句外全扫描。**极速模式**：仅扫特长句。")
         
-        st.markdown("---")
-        st.markdown("**Heuristic Thresholds (自定义字数阈值)**")
-        min_words = st.slider("Min words for scanning (最小审计字数)", 1, 30, 6)
-        smart_words = st.slider("Smart Probe threshold (中度过滤字数)", 5, 40, 12)
-        fast_words = st.slider("Fast Check threshold (重度过滤字数)", 10, 50, 18)
-        
-        st.markdown("---")
-        st.markdown("**Early-Exit Settings (早期退出设置)**")
-        early_exit_tokens = st.slider("Early-exit tokens (前缀探针字数)", 1, 20, 6)
-        early_exit_threshold = st.slider("Early-exit PPL threshold", 10.0, 100.0, 30.0, step=5.0)
+        st.markdown("### 3. 字数与模型阈值自定义")
+        with st.container():
+            min_words = st.slider(
+                "Min words (豁免超短句字数)", 
+                1, 30, 6,
+                help="小于此字数的句子（如单句词组）被视为过于简单，直接豁免，不进入大模型。"
+            )
+            smart_words = st.slider(
+                "Smart Probe threshold (均衡模式触发字数)", 
+                5, 40, 12,
+                help="均衡模式下，句子字数达到此值时触发 PPL 模型探测。"
+            )
+            fast_words = st.slider(
+                "Fast Check threshold (极速模式触发字数)", 
+                10, 50, 18,
+                help="极速模式下，句子字数达到此值时才触发 PPL 模型探测。"
+            )
+            
+            st.markdown("---")
+            st.markdown("**早期退出模型阈值 (选项2)**")
+            early_exit_tokens = st.slider(
+                "Early-exit tokens (前缀探针字数)", 
+                1, 20, 6,
+                help="仅计算句子开头的这一数量的 Token。如果前缀表现非常自然，则视为安全退出。"
+            )
+            early_exit_threshold = st.slider(
+                "Early-exit PPL threshold", 
+                10.0, 100.0, 30.0, step=5.0,
+                help="前缀 PPL 大于此值（越大于自然）时，触发早期退出。推荐值为 30.0。"
+            )
 
 mode_map = {
     "Hybrid Probe (混合模式)": "Hybrid",
@@ -381,9 +415,6 @@ if uploaded_file is not None:
     # Run fast Rules Heuristics (Track A)
     rules_res = analyze_text_rules(text)
     
-    # Reset model analysis if model settings changed and we want to re-run
-    # (Streamlit sidebar widgets automatically rerun, but we want button trigger to run calculations)
-    
     if "analysis_results" not in st.session_state:
         st.markdown("---")
         if model_loaded:
@@ -398,10 +429,20 @@ if uploaded_file is not None:
                     progress_bar = st.progress(0.0)
                     status_text = st.empty()
                     
+                    # Live update placeholders
+                    live_metrics_placeholder = st.empty()
+                    live_issues_placeholder = st.empty()
+                    
+                    live_issues_list = []
+                    scanned_count = 0
+                    skipped_count = 0
+                    early_exit_count = 0
+                    suspicious_count = 0
+                    
                     for i, s in enumerate(rules_res["sentences"]):
                         progress_pct = (i + 1) / len(rules_res["sentences"])
                         progress_bar.progress(progress_pct)
-                        status_text.text(f"Analyzing sentence {i+1}/{len(rules_res['sentences'])}...")
+                        status_text.markdown(f"**⏳ 正在扫描第 {i+1}/{len(rules_res['sentences'])} 句：** *\"{s[:120]}...\"*")
                         
                         if len(s.strip()) < 5:
                             continue
@@ -425,8 +466,11 @@ if uploaded_file is not None:
                         issues = []
                         safe_to_rewrite = True
                         
-                        # 2. Check Early-Exit Probe (Mode 2 & Mode 3)
-                        if run_ppl:
+                        if not run_ppl:
+                            skipped_count += 1
+                        else:
+                            scanned_count += 1
+                            # 2. Check Early-Exit Probe (Mode 2 & Mode 3)
                             ee_tokens = early_exit_tokens if selected_mode in ["Early-Exit", "Hybrid"] else 0
                             ee_threshold = early_exit_threshold if selected_mode in ["Early-Exit", "Hybrid"] else 0.0
                             
@@ -437,6 +481,7 @@ if uploaded_file is not None:
                             )
                             
                             if was_early_exited:
+                                early_exit_count += 1
                                 is_suspicious = False
                             else:
                                 is_suspicious = ppl < 15.0 or len(diag_rules["cliches_found"]) > 0 or len(diag_rules["genitive_chains"]) > 0 or diag_rules["nv_ratio"] > 4.0
@@ -445,7 +490,58 @@ if uploaded_file is not None:
                                     diag = judge.diagnose_sentence(s, stats=diag_rules, ppl=ppl)
                                     issues = diag.get("issues", [])
                                     safe_to_rewrite = diag.get("safe_to_rewrite", True)
+                                    
+                                    if issues:
+                                        suspicious_count += 1
+                                        live_issues_list.append({
+                                            "text": s,
+                                            "ppl": ppl,
+                                            "issues": issues,
+                                            "diag_rules": diag_rules
+                                        })
                         
+                        # Update live metrics placeholder
+                        with live_metrics_placeholder.container():
+                            st.markdown("### 📊 实时分析指标 (Live Metrics)")
+                            c1, c2, c3, c4 = st.columns(4)
+                            c1.metric("已扫描句子 (Scanned)", scanned_count)
+                            c2.metric("算力豁免 (Skipped)", skipped_count)
+                            c3.metric("首部早期退出 (Early Exited)", early_exit_count)
+                            c4.metric("已发现风险句 (Issues)", suspicious_count)
+                            
+                        # Update live issue cards
+                        if live_issues_list:
+                            with live_issues_placeholder.container():
+                                st.markdown("### ⚠️ 实时诊断流 (Live Diagnostic Stream)")
+                                # Show last 3 issues to keep UI snappy
+                                for item in live_issues_list[-3:]:
+                                    for issue in item["issues"]:
+                                        issue_type = issue.get("issue_type", "style_risk").replace("_", " ").upper()
+                                        severity = issue.get("severity", "medium").lower()
+                                        explanation_zh = issue.get("explanation_zh", "")
+                                        rewrite_suggestion = issue.get("rewrite_suggestion", "")
+                                        
+                                        tag_class = "tag-high" if severity == "high" else "tag-normal"
+                                        ppl_str = f"{item['ppl']:.2f}" if item["ppl"] is not None else "N/A"
+                                        
+                                        st.markdown(f"""
+                                        <div class="sentence-card">
+                                            <div class="card-header">
+                                                <span class="card-tag {tag_class}">{issue_type} ({severity.upper()})</span>
+                                                <span class="score-badge">PPL: {ppl_str}</span>
+                                            </div>
+                                            <div class="text-original" style="border-left: 3px solid #ff3b30;">
+                                                <strong>Original draft:</strong><br>"{item['text']}"
+                                            </div>
+                                            <div style="margin-top: 10px; font-size: 0.85rem; color: #1d1d1f; background-color: #fff9f9; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                                                <strong>诊断解释 (ZH):</strong> {explanation_zh}
+                                            </div>
+                                            <div class="text-rewrite">
+                                                <strong>✨ Recommended Academic Rewrite:</strong><br>{rewrite_suggestion}
+                                            </div>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                        
                         results.append({
                             "index": i,
                             "text": s,
@@ -461,6 +557,8 @@ if uploaded_file is not None:
                     st.session_state["analysis_results"] = results
                     status_text.empty()
                     progress_bar.empty()
+                    live_metrics_placeholder.empty()
+                    live_issues_placeholder.empty()
                     st.rerun()
         else:
             st.warning("Please download the Qwen3 model in the sidebar to enable deep PPL and rewrite suggestions.")
