@@ -1,0 +1,4 @@
+llama-cpp-python>=0.2.75
+spacy>=3.7.0
+rich>=13.7.0
+pydantic>=2.7.0
