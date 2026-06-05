@@ -1,7 +1,10 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import argparse
 from rich.console import Console
 from rich.table import Table
-import os
 
 from naturalization_layer.rules_engine import analyze_text_rules
 from naturalization_layer.ppl_engine import PPLEngine

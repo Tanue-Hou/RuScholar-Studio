@@ -1,5 +1,8 @@
-import streamlit as st
+import sys
 import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import streamlit as st
 import tempfile
 from naturalization_layer.document_parser import parse_document
 from naturalization_layer.rules_engine import analyze_text_rules
