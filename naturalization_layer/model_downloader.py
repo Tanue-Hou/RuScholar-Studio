@@ -6,15 +6,22 @@ console = Console()
 
 MODEL_URL = "https://modelscope.cn/api/v1/models/Qwen/Qwen3-4B-GGUF/repo?Revision=master&FilePath=Qwen3-4B-Q5_K_M.gguf"
 
+EXPECTED_SIZE = 2889513184
+
 def download_model(dest_path: str, progress_callback=None):
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-    # If file exists but is suspiciously small (e.g., less than 10MB), delete and download again
+    
+    # If final file exists and is complete, return
     if os.path.exists(dest_path):
-        if os.path.getsize(dest_path) > 10 * 1024 * 1024:
+        if os.path.getsize(dest_path) == EXPECTED_SIZE:
             return
         else:
-            console.print("[yellow]Existing model file is corrupted or too small. Re-downloading...[/yellow]")
+            console.print("[yellow]Existing model file size is incorrect. Deleting...[/yellow]")
             os.remove(dest_path)
+            
+    tmp_path = dest_path + ".tmp"
+    if os.path.exists(tmp_path):
+        os.remove(tmp_path)
         
     console.print(f"[yellow]Downloading Qwen GGUF model to {dest_path}...[/yellow]")
     
@@ -24,5 +31,11 @@ def download_model(dest_path: str, progress_callback=None):
             progress = min(1.0, downloaded / total_size)
             progress_callback(progress)
             
-    urllib.request.urlretrieve(MODEL_URL, dest_path, reporthook)
-    console.print("[green]Download complete![/green]")
+    try:
+        urllib.request.urlretrieve(MODEL_URL, tmp_path, reporthook)
+        os.rename(tmp_path, dest_path)
+        console.print("[green]Download complete![/green]")
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        raise e

@@ -16,11 +16,14 @@ st.title("🇷🇺 Academic Russian Style Diagnostics & Naturalization")
 # Configuration
 MODEL_DIR = "models"
 MODEL_PATH = os.path.join(MODEL_DIR, "Qwen3-4B-Q5_K_M.gguf")
+EXPECTED_SIZE = 2889513184
+
+model_loaded = os.path.exists(MODEL_PATH) and os.path.getsize(MODEL_PATH) == EXPECTED_SIZE
 
 # Sidebar for Model Status
 st.sidebar.header("Model Management")
-if not os.path.exists(MODEL_PATH):
-    st.sidebar.warning("Model file not found locally.")
+if not model_loaded:
+    st.sidebar.warning("Model file not found or incomplete locally.")
     if st.sidebar.button("Download Qwen3 4B GGUF Model (3.2GB)"):
         progress_bar = st.sidebar.progress(0.0)
         status_text = st.sidebar.empty()
@@ -31,9 +34,10 @@ if not os.path.exists(MODEL_PATH):
             
         with st.spinner("Downloading model from ModelScope... Please wait."):
             download_model(MODEL_PATH, progress_callback=update_progress)
-        st.sidebar.success("Model downloaded successfully!")
+        st.sidebar.success("Model downloaded successfully! Please refresh or rerun the app.")
+        st.rerun()
 else:
-    st.sidebar.success("Qwen 3B GGUF Model is loaded.")
+    st.sidebar.success("Qwen3 4B GGUF Model is fully loaded and ready.")
 
 # File Uploader
 uploaded_file = st.file_uploader("Upload draft (PDF, DOCX, TXT, MD)", type=["pdf", "docx", "txt", "md"])
@@ -63,7 +67,7 @@ if uploaded_file is not None:
             st.write("Matched clichés:", rules_res["matched_cliches"])
             
     # LLM Diagnostics if model exists
-    if os.path.exists(MODEL_PATH):
+    if model_loaded:
         st.subheader("🧠 Track B & C: Model PPL & Academic Rewriting")
         if st.button("Run Deep Analysis"):
             engine = PPLEngine(MODEL_PATH)
