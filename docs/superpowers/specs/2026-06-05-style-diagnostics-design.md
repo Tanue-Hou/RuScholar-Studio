@@ -70,13 +70,32 @@
 ## 6. 本地部署目录结构设计
 
 *   `scripts/style_diagnostics.py`: CLI 启动文件。
+*   `scripts/web_app.py`: Streamlit Web UI 启动文件。
+*   `naturalization_layer/document_parser.py`: PDF 和 DOCX 文本解析模块。
+*   `naturalization_layer/model_downloader.py`: 模型自动下载器模块。
 *   `naturalization_layer/qwen_evaluator.py`: 封装 `llama-cpp-python` 的 Logits 提取和 PPL 计算模块。
 *   `naturalization_layer/prompts/judge_prompt.md`: Qwen JSON 格式诊断与重写提示词。
 
-## 7. 运行参数示例
+## 7. 文档解析与模型下载设计 (Document Parsing & Auto-download)
+
+### 7.1 PDF/DOCX 解析
+通过 `pypdf` 和 `python-docx` 读取上传的文件，转换为标准 unicode 文本后送入 `spacy` 切句。
+```python
+# python-docx 核心逻辑
+doc = docx.Document(file_path)
+text = "\n".join([p.text for p in doc.paragraphs])
+```
+
+### 7.2 模型自动下载
+检测 `models/` 目录下是否存在 GGUF 文件。若无，提供一键下载按钮，从 ModelScope (国内镜像) 或 HuggingFace 快速下载模型。
+
+## 8. 运行参数与启动示例
 
 ```bash
-# 在 RTX 3070 或 M3 Pro 上本地启动诊断
+# 启动 Web 界面
+streamlit run scripts/web_app.py
+
+# 在 RTX 3070 或 M3 Pro 上本地启动命令行诊断
 python scripts/style_diagnostics.py \
   --input draft.md \
   --model qwen3-4b-instruct-q5_k_m.gguf \
