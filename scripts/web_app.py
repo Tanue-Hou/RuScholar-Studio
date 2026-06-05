@@ -22,8 +22,15 @@ st.sidebar.header("Model Management")
 if not os.path.exists(MODEL_PATH):
     st.sidebar.warning("Model file not found locally.")
     if st.sidebar.button("Download Qwen3 4B GGUF Model (3.2GB)"):
+        progress_bar = st.sidebar.progress(0.0)
+        status_text = st.sidebar.empty()
+        
+        def update_progress(pct):
+            progress_bar.progress(pct)
+            status_text.text(f"Downloading: {pct*100:.1f}%")
+            
         with st.spinner("Downloading model from ModelScope... Please wait."):
-            download_model(MODEL_PATH)
+            download_model(MODEL_PATH, progress_callback=update_progress)
         st.sidebar.success("Model downloaded successfully!")
 else:
     st.sidebar.success("Qwen 3B GGUF Model is loaded.")
