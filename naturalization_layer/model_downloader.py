@@ -4,7 +4,7 @@ from rich.console import Console
 
 console = Console()
 
-MODEL_URL = "https://modelscope.cn/api/v1/models/qwen/Qwen2.5-3B-Instruct-GGUF/repo?Revision=master&FilePath=qwen2.5-3b-instruct-q5_k_m.gguf"
+MODEL_URL = "https://modelscope.cn/api/v1/models/Qwen/Qwen3-4B-GGUF/repo?Revision=master&FilePath=Qwen3-4B-Q5_K_M.gguf"
 
 def download_model(dest_path: str):
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)

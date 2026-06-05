@@ -15,13 +15,13 @@ st.title("🇷🇺 Academic Russian Style Diagnostics & Naturalization")
 
 # Configuration
 MODEL_DIR = "models"
-MODEL_PATH = os.path.join(MODEL_DIR, "qwen2.5-3b-instruct-q5_k_m.gguf")
+MODEL_PATH = os.path.join(MODEL_DIR, "Qwen3-4B-Q5_K_M.gguf")
 
 # Sidebar for Model Status
 st.sidebar.header("Model Management")
 if not os.path.exists(MODEL_PATH):
     st.sidebar.warning("Model file not found locally.")
-    if st.sidebar.button("Download Qwen 3B GGUF Model (3.2GB)"):
+    if st.sidebar.button("Download Qwen3 4B GGUF Model (3.2GB)"):
         with st.spinner("Downloading model from ModelScope... Please wait."):
             download_model(MODEL_PATH)
         st.sidebar.success("Model downloaded successfully!")
