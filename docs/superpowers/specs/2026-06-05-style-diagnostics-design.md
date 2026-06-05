@@ -1,103 +1,91 @@
-# Design Spec: Style Diagnostics & Academic Naturalization (Workflow 5)
+# Design Spec: Russian Academic Naturalness Diagnostics Engine
 
-**Date**: 2026-06-05
+**Date**: 2026-06-05 (Updated 2026-06-06)
 **Context**: `phd-thesis-butler` (Russian Academic Writing Assistant)
-**Status**: Draft (Pending User Review)
+**Status**: Formal Draft (Pending Review)
 
-## 1. 目标 (Objective)
+## 1. Ethical Boundary & Product Philosophy
+本模块正式命名为 **Russian Academic Naturalness Diagnostics Engine (俄语学术自然度与翻译腔诊断引擎)**。
+- **定位**：本模块用于多维度诊断文本中的写作风险，包括：疑似人工智能生成（AI-generated suspicion）、机器翻译腔（Translationese）、模板化表达（Generic Cliché）、语义冗余（Redundancy）、术语不一致（Terminology Inconsistency）等。
+- **判断依据优先**：系统不给出武断的“查重率”百分比，而是将“AI生成”、“机翻腔”等作为具体的诊断选项（Issue Types），并强制要求模型给出明确的判断依据（Evidence）和原因解释（Explanation）。
 
-构建一个完全本地化、支持离线运行的俄语学术写作诊断引擎（Workflow 5）。该引擎主要用于检测和修复俄语论文草稿中的**机器翻译腔（Translationese）**、**AI套话模板**以及**句法过度均匀（Uniformity）**的问题。
+## 2. Four-Track Architecture (四轨架构)
+系统采用分离的底层统计与高层语义判别机制：
 
-本方案在设计上逆向参考了主流防剽窃系统（如 Antiplagiat.ru）的 AI 检测逻辑，通过引入代理指标（Proxy Indicators）来提升文本的真实感和学术自然度，但不承诺或直接输出“AI 概率”。
+- **Track A: Rule-based diagnostics (规则与结构统计)**
+  - 核心指标：`sentence_length_mean`, `sentence_length_std`, `connector_density`, `cliche_density`。
+- **Track B: Qwen3 Predictability Probe (可预测性代理指标)**
+  - 后端：`Qwen3-4B-GGUF` + `llama-cpp-python` (启用 `logits_all=True`)。
+  - 核心指标：`token_nll_std`, `sentence_ppl_mean`, `sentence_ppl_std`, `low_surprise_token_ratio`, `predictability_plateau_length`。
+  - 功能：提取预测难度特征，将异常平滑的区域抛给 Track D。
+- **Track C: Redundancy & Specificity Analysis (冗余与具体性分析)**
+  - 功能：检查语义重复（车轱辘话）、以及判断对象/方法/指标等是否明确。
+- **Track D: Qwen3 Explanatory Review and Naturalization (解释性学术编辑)**
+  - 后端：Qwen3 作为强大的学术编辑者阅读上下文。
+  - 功能：在多维诊断选项中（含 AI 生成嫌疑、机翻腔等）进行归类，并提取原文证据。
 
-## 2. 硬件与核心模型 (Hardware & Target Model)
+## 3. LLM JSON Schema
+LLM Judge 将输出详尽的 `issues` 列表，严格遵循以下结构，将“AI生成”作为可选的 `issue_type` 之一：
 
-为完美适配 **RTX 3070 (8GB VRAM, CUDA)** 与 **Apple M3 Pro (Unified Memory, Metal)**：
-
-*   **推断后端**: `llama-cpp-python` (跨平台硬件加速兼容，显存管理极其精准)。
-*   **核心模型**: **Qwen 3 (4B-Instruct)** 或 **Qwen2.5-3B-Instruct** (量化格式：GGUF `Q5_K_M` 或 `Q8_0`)。
-*   **显存占用**: 模型文件占 3.2GB 左右，预留约 1GB 显存给 2000 Tokens 左右的 KV Cache，完美适配 8GB VRAM 环境且杜绝 OOM。
-
-## 3. “双轨并进”诊断架构 (The Anti-Simulator Pipeline)
-
-引擎执行流程分为两个并行的探测轨道：
-
-### 3.1 概率与突发度探测流 (Logits & Burstiness Analysis)
-利用 `llama-cpp-python` 的底层 API 提取 token 的生成概率，不进行文本生成，仅进行评估。
-
-*   **滑动窗口切块**: 为了保护显存并提高速度，文本被切分为每次 300-500 词的段落组（Chunks）。
-*   **平均困惑度 (Mean PPL)**: 提取每一个俄语 token 的负对数似然度（Negative Log-Likelihood），计算句子级的 PPL。
-*   **突发度计算 (Burstiness Variance)**: 统计段落内不同句子 PPL 的标准差。若标准差 $CV < 0.5$（即每句话长短与复杂度过度一致），触发 `Uniformity Risk: HIGH`。
-*   **局部概率陷阱**: 检查句子内部是否存在局部的“低频词汇尖峰”。AI 文本通常全句处于高概率区，若某句全域概率平滑无异常波动，则判定为“套话”。
-
-### 3.2 高层风格特征判别器 (LLM-as-a-Judge)
-针对在 3.1 中被标记为高风险（如 PPL 极度平滑或方差极小）的句子，触发 Qwen 模型的生成功能，进行零样本（Zero-shot）病理诊断。
-
-*   **输入**: 高风险句及其前后文。
-*   **输出格式 (JSON)**:
-    ```json
+```json
+{
+  "segment_id": "p003_s002",
+  "issues": [
     {
-      "has_translationese": true,
-      "syntax_uniformity_issue": true,
-      "cliches_found": ["Важно отметить, что", "Таким образом"],
-      "naturalization_suggestion": "Исследование выявило..." // 带有倒装或名词化压缩的改写建议
+      "issue_type": "ai_generated_suspicion", // 可选: ai_generated_suspicion, machine_translation_cliche, semantic_redundancy, lack_of_specificity, etc.
+      "severity": "high",
+      "evidence": "В данном исследовании мы изучили... Важно отметить, что...",
+      "explanation_zh": "这段话使用了高度模板化的引导语，缺乏针对该学科的具体指代，且行文结构完全符合典型大模型的万能开头模版，疑似为人工智能生成。",
+      "explanation_ru": "Текст имеет шаблонную структуру, характерную для генерации ИИ, без специфической привязки к предмету...",
+      "recommended_action": "rewrite",
+      "rewrite_suggestion": "Проведенный анализ...",
+      "author_check_required": true
     }
-    ```
-
-## 4. 自然化改写策略 (Academic Naturalization Tactics)
-
-生成的改写建议（`naturalization_suggestion`）将严格遵循以下策略，以打破 AI 特征：
-1.  **次优词注入 (Rank-Shift)**: 打破首选词概率分布，使用中低频的特定学术词汇。
-2.  **句法倒装 (Syntactic Inversion)**: 舍弃默认的 S-V-O 结构，使用宾语/状语前置以符合高级俄语学术行文习惯。
-3.  **名词化压缩 (Nominalization)**: 将口语化或机械的从句压缩为嵌套的名词第二格短语。
-
-## 5. 输出报告展示 (Diagnostic Output)
-
-诊断系统绝不会输出诸如 "AI Rate: 85%" 的误导性指标，而是输出专业的诊断报告：
-
-```text
-[诊断结果]
-- Predictability risk: High (文本过于模式化)
-- Sentence uniformity risk: High (句长极度均匀)
-- Translationese risk: Medium
-
-[高风险句分析]
-> "В данном контексте мы можем видеть, что результаты показывают..."
-- 问题: 包含典型翻译腔，且缺乏专业指代。
-- Qwen 改写建议: "Полученные результаты свидетельствуют о..."
+  ],
+  "overall_comment": "整体逻辑连贯，但在引言部分存在较多疑似 AI 生成的模板化结构。",
+  "safe_to_rewrite": true
+}
 ```
 
-## 6. 本地部署目录结构设计
+## 4. Scoring System (评分系统)
+构建 **Style Risk Index** (0-100)，涵盖以下诊断选项风险：
+- AI-generated Suspicion Risk (疑似 AI 生成风险)
+- Translationese Risk (机器翻译腔风险)
+- Generic Cliché Risk (套话模板风险)
+- Uniformity / Predictability Risk (结构过度均匀风险)
+- Redundancy Risk (语义冗余风险)
 
-*   `scripts/style_diagnostics.py`: CLI 启动文件。
-*   `scripts/web_app.py`: Streamlit Web UI 启动文件。
-*   `naturalization_layer/document_parser.py`: PDF 和 DOCX 文本解析模块。
-*   `naturalization_layer/model_downloader.py`: 模型自动下载器模块。
-*   `naturalization_layer/qwen_evaluator.py`: 封装 `llama-cpp-python` 的 Logits 提取和 PPL 计算模块。
-*   `naturalization_layer/prompts/judge_prompt.md`: Qwen JSON 格式诊断与重写提示词。
+## 5. Streamlit UI Design (双栏交互界面)
+- **左栏 (Analysis Panel)**：展示分维度指标面板与 Issue Cards（诊断卡片，卡片右上角标注唯一 `issue_id`，卡片内明确标示**判断依据 Evidence**和**问题类型**）。
+- **右栏 (Manuscript Viewer)**：完整展示用户文档。对应存在风险的文本通过 HTML 标签 `<mark class="risk-high" data-issue="I-001">` 进行视觉高亮。
+- **P0 阶段限制**：仅支持静态高亮和点击左栏卡片时的页面锚点跳转定位。
 
-## 7. 文档解析与模型下载设计 (Document Parsing & Auto-download)
+## 6. Calibration Framework (校准集框架)
+- **目录规划**：`calibration/`。
+- **P0 策略**：仅创建空目录结构、`calibration_schema.json` 以及 `calibration_baseline.example.json`。使用 heuristic 阈值。
+- **P1 策略**：填充真实语料样本。
 
-### 7.1 PDF/DOCX 解析
-通过 `pypdf` 和 `python-docx` 读取上传的文件，转换为标准 unicode 文本后送入 `spacy` 切句。
-```python
-# python-docx 核心逻辑
-doc = docx.Document(file_path)
-text = "\n".join([p.text for p in doc.paragraphs])
-```
+## 7. RTX 3070 Runtime Strategy
+- **分块策略**：按句子或短段落为 Chunk 使用滑动窗口，禁止整章无脑抛给大模型。
+- **硬保护规则 (Hard Protection)**：禁止修改并豁免诊断涉及到的公式、变量、单位、数值、引用编号 `[23]`、图表编号、方法缩写。
 
-### 7.2 模型自动下载
-检测 `models/` 目录下是否存在 GGUF 文件。若无，提供一键下载按钮，从 ModelScope (国内镜像) 或 HuggingFace 快速下载模型。
+## 8. Output Files (持久化输出)
+- `style_diagnostic.json`
+- `style_diagnostic_report.md`
+- `highlighted_manuscript.html`
+- `revision_suggestions.md`
+- `author_check_items.md`
+- `calibration_status.json`
 
-## 8. 运行参数与启动示例
+## 9. Implementation Plan (执行优先次序)
 
-```bash
-# 启动 Web 界面
-streamlit run scripts/web_app.py
-
-# 在 RTX 3070 或 M3 Pro 上本地启动命令行诊断
-python scripts/style_diagnostics.py \
-  --input draft.md \
-  --model qwen3-4b-instruct-q5_k_m.gguf \
-  --mode full-diagnostics
-```
+### P0 (Foundation & Heuristics)
+- [ ] P0-1: 冻结命名与伦理边界规范代码。
+- [ ] P0-2: 实现 Pydantic 版本的 JSON Schema。
+- [ ] P0-3: 实现 Track A 规则诊断（无模型版）。
+- [ ] P0-4: 实现 Track D LLM Judge。
+- [ ] P0-5: 实现 Streamlit 双栏 UI 静态高亮与锚点对应。
+- [ ] P0-6: 接入 Track B PPL Proxy。
+- [ ] P0-7: 接入 Track C 语义重复检测。
+- [ ] P0-8: 建立 `calibration/` 框架目录。
+- [ ] P0-9: 生成全链路离线测试报告。

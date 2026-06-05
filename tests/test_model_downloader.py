@@ -9,10 +9,13 @@ def test_download_model(tmp_path):
     assert not os.path.exists(dest_path)
     
     # Mock urllib.request.urlretrieve so we don't download a 3.2GB file in tests
-    with patch("urllib.request.urlretrieve") as mock_retrieve:
+    with patch("urllib.request.urlretrieve") as mock_retrieve, \
+         patch("naturalization_layer.model_downloader.EXPECTED_SIZE", 19):
         # Create a dummy file when urlretrieve is called to simulate successful download
-        def side_effect(url, filepath):
-            with open(filepath, "w") as f:
+        def side_effect(url, filename=None, reporthook=None, *args, **kwargs):
+            if reporthook:
+                reporthook(1, 1024, 1024)
+            with open(filename, "w") as f:
                 f.write("dummy model content")
         
         mock_retrieve.side_effect = side_effect

@@ -5,7 +5,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 import tempfile
 from naturalization_layer.document_parser import parse_document
-from naturalization_layer.rules_engine import analyze_text_rules
+from naturalization_layer.rules_engine import analyze_text_rules, should_run_ppl_heuristic
 from naturalization_layer.ppl_engine import PPLEngine
 from naturalization_layer.llm_judge import StyleJudge
 from naturalization_layer.model_downloader import download_model
@@ -146,9 +146,25 @@ div[data-testid="stMetricLabel"] {
     color: #ff3b30;
 }
 
+.tag-protected {
+    background-color: #e8f4fd;
+    color: #0071e3;
+}
+
 .tag-normal {
     background-color: #f5f5f7;
     color: #86868b;
+}
+
+.card-stats {
+    font-size: 0.8rem;
+    color: #86868b;
+    margin-top: 0.5rem;
+    border-top: 1px solid #f5f5f7;
+    padding-top: 0.5rem;
+    display: flex;
+    gap: 15px;
+    align-items: center;
 }
 
 .text-original {
@@ -178,6 +194,85 @@ div[data-testid="stMetricLabel"] {
     font-weight: 600;
     font-size: 0.85rem;
     color: #86868b;
+}
+
+/* Custom Scrollbar for manuscript viewer */
+.manuscript-viewer::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.manuscript-viewer::-webkit-scrollbar-track {
+    background: transparent;
+}
+.manuscript-viewer::-webkit-scrollbar-thumb {
+    background: #d2d2d7;
+    border-radius: 3px;
+}
+.manuscript-viewer::-webkit-scrollbar-thumb:hover {
+    background: #86868b;
+}
+
+/* Sticky right column for manuscript viewer */
+.manuscript-viewer {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 2rem;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 1.5rem;
+    background-color: #ffffff;
+    border: 1px solid #e5e5ea;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.015);
+    line-height: 1.8;
+    color: #1d1d1f;
+    font-size: 1.05rem;
+}
+
+/* Highlights for manuscript */
+.highlight-high {
+    background-color: #ffeef0;
+    border-bottom: 2px solid #ff3b30;
+    color: #ff3b30;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+.highlight-high:hover {
+    background-color: #ffd1d6;
+}
+
+.highlight-medium {
+    background-color: #fff9e6;
+    border-bottom: 2px solid #ff9500;
+    color: #b25900;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+.highlight-medium:hover {
+    background-color: #ffe8b3;
+}
+
+.highlight-protected {
+    background-color: #e8f4fd;
+    border-bottom: 2px solid #0071e3;
+    color: #0071e3;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+.highlight-protected:hover {
+    background-color: #cfe8fc;
+}
+
+.highlight-normal {
+    color: #1d1d1f;
+    padding: 2px 4px;
 }
 </style>
 """
@@ -215,10 +310,63 @@ if not model_loaded:
 else:
     st.sidebar.success("Qwen3 4B GGUF Model is fully loaded and ready.")
 
+# Scanning Control Parameters
+scan_mode = "Hybrid Probe (混合模式)"
+heuristic_depth = "Smart Probe (均衡模式)"
+min_words = 6
+smart_words = 12
+fast_words = 18
+early_exit_tokens = 6
+early_exit_threshold = 30.0
+
+if model_loaded:
+    with st.sidebar.expander("⚙️ Advanced Scanner Settings", expanded=True):
+        scan_mode = st.radio(
+            "Scanning Mode (扫描模式)",
+            ["Hybrid Probe (混合模式)", "Heuristic Only (仅启发式)", "Early-Exit Only (仅早期退出)"],
+            index=0
+        )
+        
+        heuristic_depth = st.selectbox(
+            "Heuristic Filter Depth (过滤深度)",
+            ["Smart Probe (均衡模式)", "Deep Scan (全量深检)", "Fast Check (极速模式)"],
+            index=0
+        )
+        
+        st.markdown("---")
+        st.markdown("**Heuristic Thresholds (自定义字数阈值)**")
+        min_words = st.slider("Min words for scanning (最小审计字数)", 1, 30, 6)
+        smart_words = st.slider("Smart Probe threshold (中度过滤字数)", 5, 40, 12)
+        fast_words = st.slider("Fast Check threshold (重度过滤字数)", 10, 50, 18)
+        
+        st.markdown("---")
+        st.markdown("**Early-Exit Settings (早期退出设置)**")
+        early_exit_tokens = st.slider("Early-exit tokens (前缀探针字数)", 1, 20, 6)
+        early_exit_threshold = st.slider("Early-exit PPL threshold", 10.0, 100.0, 30.0, step=5.0)
+
+mode_map = {
+    "Hybrid Probe (混合模式)": "Hybrid",
+    "Heuristic Only (仅启发式)": "Heuristic",
+    "Early-Exit Only (仅早期退出)": "Early-Exit"
+}
+depth_map = {
+    "Smart Probe (均衡模式)": "Smart Probe",
+    "Deep Scan (全量深检)": "Deep Scan",
+    "Fast Check (极速模式)": "Fast Check"
+}
+selected_mode = mode_map[scan_mode]
+selected_depth = depth_map[heuristic_depth]
+
 # File Uploader
 uploaded_file = st.file_uploader("Upload your document draft (PDF, DOCX, TXT, MD)", type=["pdf", "docx", "txt", "md"])
 
 if uploaded_file is not None:
+    # Clear cache if uploading a new file
+    if st.session_state.get("last_uploaded_file_name") != uploaded_file.name:
+        st.session_state["last_uploaded_file_name"] = uploaded_file.name
+        if "analysis_results" in st.session_state:
+            del st.session_state["analysis_results"]
+            
     with tempfile.NamedTemporaryFile(delete=False, suffix="." + uploaded_file.name.split(".")[-1]) as tmp:
         tmp.write(uploaded_file.getvalue())
         tmp_path = tmp.name
@@ -230,66 +378,222 @@ if uploaded_file is not None:
         
     st.info(f"Loaded {len(text)} characters from {uploaded_file.name}")
     
-    # Run Rules Heuristics
+    # Run fast Rules Heuristics (Track A)
     rules_res = analyze_text_rules(text)
     
-    st.markdown("---")
-    st.subheader("📊 Track A: Structural Diagnostics")
+    # Reset model analysis if model settings changed and we want to re-run
+    # (Streamlit sidebar widgets automatically rerun, but we want button trigger to run calculations)
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Sentence Count", rules_res["sentence_count"])
-    with col2:
-        st.metric("Cliché Detections", rules_res["cliche_matches"])
-    with col3:
-        st.metric("Length Variance", f"{rules_res['length_variance']:.1f}")
-        
-    if rules_res["matched_cliches"]:
-        st.markdown(f"**Detected cliché patterns:** `{', '.join(rules_res['matched_cliches'])}`")
+    if "analysis_results" not in st.session_state:
+        st.markdown("---")
+        if model_loaded:
+            st.subheader("🧠 Deep Diagnostics Scanner")
+            st.warning("Deep Diagnostics is ready to run. This will evaluate sentence complexity, predictability (PPL), and execute stylistic corrections.")
+            if st.button("Run Deep Analysis"):
+                with st.spinner("Running local token-level diagnostics with Qwen3..."):
+                    engine = PPLEngine(MODEL_PATH)
+                    judge = StyleJudge(engine.llm)
+                    
+                    results = []
+                    progress_bar = st.progress(0.0)
+                    status_text = st.empty()
+                    
+                    for i, s in enumerate(rules_res["sentences"]):
+                        progress_pct = (i + 1) / len(rules_res["sentences"])
+                        progress_bar.progress(progress_pct)
+                        status_text.text(f"Analyzing sentence {i+1}/{len(rules_res['sentences'])}...")
+                        
+                        if len(s.strip()) < 5:
+                            continue
+                        
+                        diag_rules = rules_res["sentence_diagnostics"][i]
+                        
+                        # 1. Check Heuristic Filter (Mode 1 & Mode 3)
+                        run_ppl = True
+                        if selected_mode in ["Heuristic", "Hybrid"]:
+                            run_ppl = should_run_ppl_heuristic(
+                                diag_rules, 
+                                selected_depth,
+                                min_words=min_words,
+                                smart_words=smart_words,
+                                fast_words=fast_words
+                            )
+                            
+                        ppl = None
+                        was_early_exited = False
+                        is_suspicious = False
+                        issues = []
+                        safe_to_rewrite = True
+                        
+                        # 2. Check Early-Exit Probe (Mode 2 & Mode 3)
+                        if run_ppl:
+                            ee_tokens = early_exit_tokens if selected_mode in ["Early-Exit", "Hybrid"] else 0
+                            ee_threshold = early_exit_threshold if selected_mode in ["Early-Exit", "Hybrid"] else 0.0
+                            
+                            ppl, was_early_exited = engine.evaluate_sentence_ppl(
+                                s, 
+                                early_exit_tokens=ee_tokens, 
+                                early_exit_threshold=ee_threshold
+                            )
+                            
+                            if was_early_exited:
+                                is_suspicious = False
+                            else:
+                                is_suspicious = ppl < 15.0 or len(diag_rules["cliches_found"]) > 0 or len(diag_rules["genitive_chains"]) > 0 or diag_rules["nv_ratio"] > 4.0
+                                
+                                if is_suspicious:
+                                    diag = judge.diagnose_sentence(s, stats=diag_rules, ppl=ppl)
+                                    issues = diag.get("issues", [])
+                                    safe_to_rewrite = diag.get("safe_to_rewrite", True)
+                        
+                        results.append({
+                            "index": i,
+                            "text": s,
+                            "ppl": ppl,
+                            "was_early_exited": was_early_exited,
+                            "run_ppl": run_ppl,
+                            "diag_rules": diag_rules,
+                            "is_suspicious": is_suspicious,
+                            "issues": issues,
+                            "safe_to_rewrite": safe_to_rewrite
+                        })
+                    
+                    st.session_state["analysis_results"] = results
+                    status_text.empty()
+                    progress_bar.empty()
+                    st.rerun()
+        else:
+            st.warning("Please download the Qwen3 model in the sidebar to enable deep PPL and rewrite suggestions.")
             
-    # LLM Diagnostics
-    st.markdown("---")
-    if model_loaded:
-        st.subheader("🧠 Track B & C: Model PPL & Academic Rewriting")
-        if st.button("Run Deep Analysis"):
-            with st.spinner("Running local token-level diagnostics with Qwen3..."):
-                engine = PPLEngine(MODEL_PATH)
-                judge = StyleJudge(engine.llm)
+    # Display Results if Cached
+    if "analysis_results" in st.session_state:
+        results = st.session_state["analysis_results"]
+        
+        # Calculate statistics
+        total_sents = len(results)
+        skipped_sents = sum(1 for r in results if not r["run_ppl"])
+        early_exited_sents = sum(1 for r in results if r["was_early_exited"])
+        suspicious_sents = sum(1 for r in results if r["is_suspicious"] and r["issues"])
+        
+        st.markdown("---")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Sentences", total_sents)
+        with col2:
+            st.metric("Heuristic Skipped (算力豁免)", skipped_sents)
+        with col3:
+            st.metric("Early Exited (早期退出)", early_exited_sents)
+        with col4:
+            st.metric("Detected Issues (诊断风险句)", suspicious_sents)
+            
+        # 2. Main layout: Dual Columns
+        st.markdown("---")
+        left_col, right_col = st.columns([5, 7])
+        
+        with left_col:
+            st.markdown("### 🔍 Filter Diagnostics")
+            severity_filter = st.multiselect(
+                "Filter by Severity (按严重度筛选)", 
+                ["high", "medium", "low"], 
+                default=["high", "medium", "low"]
+            )
+            issue_type_filter = st.multiselect(
+                "Filter by Issue Type (按问题类型筛选)", 
+                ["ai_generated_suspicion", "machine_translation_cliche", "style_heavy", "semantic_redundancy", "other_risk"],
+                default=["ai_generated_suspicion", "machine_translation_cliche", "style_heavy"]
+            )
+            keyword_search = st.text_input("Search keyword in original draft (关键字搜索)").strip().lower()
+            
+            # Show filterable issue cards
+            st.markdown("### 📋 Diagnostic Cards")
+            
+            # Filter results in memory
+            visible_card_indices = set()
+            for r in results:
+                if keyword_search and keyword_search not in r["text"].lower():
+                    continue
                 
-                for s in rules_res["sentences"]:
-                    if len(s.strip()) < 5:
-                        continue
-                    ppl = engine.evaluate_sentence_ppl(s)
+                if r["is_suspicious"] and r["issues"]:
+                    matched_issues = []
+                    for issue in r["issues"]:
+                        sev = issue.get("severity", "medium").lower()
+                        itype = issue.get("issue_type", "other_risk").lower()
+                        if sev in severity_filter and itype in issue_type_filter:
+                            matched_issues.append(issue)
                     
-                    is_suspicious = ppl < 10.0 or any(c in s.lower() for c in rules_res["matched_cliches"])
+                    if matched_issues:
+                        visible_card_indices.add(r["index"])
+                        
+                        for issue in matched_issues:
+                            issue_type = issue.get("issue_type", "style_risk").replace("_", " ").upper()
+                            severity = issue.get("severity", "medium").lower()
+                            explanation_zh = issue.get("explanation_zh", "")
+                            explanation_ru = issue.get("explanation_ru", "")
+                            evidence = issue.get("evidence", "")
+                            rewrite_suggestion = issue.get("rewrite_suggestion", "")
+                            
+                            tag_class = "tag-high" if severity == "high" else "tag-normal"
+                            
+                            evidence_html = f"<div><strong>Evidence:</strong> <code style='color: #ff3b30;'>{evidence}</code></div>" if evidence else ""
+                            ppl_str = f"{r['ppl']:.2f}" if r["ppl"] is not None else "N/A"
+                            
+                            st.markdown(f"""
+                            <div class="sentence-card" id="card_{r['index']}">
+                                <div class="card-header">
+                                    <span class="card-tag {tag_class}">{issue_type} ({severity.upper()})</span>
+                                    <span class="score-badge">PPL: {ppl_str}</span>
+                                </div>
+                                <div class="text-original" style="border-left: 3px solid #ff3b30;">
+                                    <strong>Original draft:</strong><br>"{r['text']}"
+                                </div>
+                                <div style="margin-top: 10px; font-size: 0.85rem; color: #1d1d1f; background-color: #fff9f9; padding: 10px; border-radius: 6px; margin-bottom: 10px;">
+                                    {evidence_html}
+                                    <div style="margin-top: 5px;"><strong>诊断解释 (ZH):</strong> {explanation_zh}</div>
+                                    <div style="margin-top: 5px; color: #6e6e73;"><strong>Explanation (RU):</strong> {explanation_ru}</div>
+                                </div>
+                                <div class="text-rewrite">
+                                    <strong>✨ Recommended Academic Rewrite:</strong><br>{rewrite_suggestion}
+                                </div>
+                                <div class="card-stats">
+                                    <span>📊 N/V: {r['diag_rules']['nv_ratio']}</span>
+                                    <span>🔒 Passive: {r['diag_rules']['passive_count']}</span>
+                                    <a href="#doc_sent_{r['index']}" style="margin-left: auto; text-decoration: none; color: #0071e3; font-weight: 500;">Locate in Draft ↑</a>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+            if not visible_card_indices:
+                st.info("No issue cards match the active filters.")
+                
+            if st.button("Reset Analysis Cache (清除分析缓存)"):
+                if "analysis_results" in st.session_state:
+                    del st.session_state["analysis_results"]
+                st.rerun()
+                
+        with right_col:
+            st.markdown("### 📝 Sticky Manuscript Viewer")
+            
+            # Construct highlighted HTML
+            html_content = []
+            for r in results:
+                if r["index"] in visible_card_indices:
+                    severity = "medium"
+                    for issue in r["issues"]:
+                        if issue.get("severity", "medium").lower() == "high":
+                            severity = "high"
+                            break
                     
-                    if is_suspicious:
-                        diag = judge.diagnose_sentence(s)
-                        suggestion = diag.get("rewrite_suggestion", "")
-                        
-                        tag_html = '<span class="card-tag tag-high">AI / Translationese Risk</span>'
-                        rewrite_section = f"""
-                        <div class="text-rewrite">
-                            <strong>✨ Recommended Academic Rewrite:</strong><br>{suggestion}
-                        </div>
-                        """
-                    else:
-                        suggestion = "-"
-                        tag_html = '<span class="card-tag tag-normal">Natural Russian</span>'
-                        rewrite_section = ""
-                        
-                    # Render Beautiful Card
-                    st.markdown(f"""
-                    <div class="sentence-card">
-                        <div class="card-header">
-                            {tag_html}
-                            <span class="score-badge">PPL Score: {ppl:.2f}</span>
-                        </div>
-                        <div class="text-original">
-                            <strong>Original draft:</strong><br>"{s}"
-                        </div>
-                        {rewrite_section}
-                    </div>
-                    """, unsafe_allow_html=True)
-    else:
-        st.warning("Please download the Qwen3 model in the sidebar to enable deep PPL diagnostics and rewrite suggestions.")
+                    highlight_class = "highlight-high" if severity == "high" else "highlight-medium"
+                    html_content.append(f"""<a href="#card_{r['index']}" style="color: inherit; text-decoration: none;"><span class="{highlight_class}" id="doc_sent_{r['index']}" title="Click to view card details">{r['text']}</span></a>""")
+                elif r["diag_rules"].get("is_protected", False):
+                    html_content.append(f"""<span class="highlight-protected" id="doc_sent_{r['index']}" title="Protected Formula/Ref">{r['text']}</span>""")
+                else:
+                    html_content.append(f"""<span class="highlight-normal" id="doc_sent_{r['index']}">{r['text']}</span>""")
+            
+            full_html = " ".join(html_content)
+            
+            st.markdown(f"""
+            <div class="manuscript-viewer">
+                {full_html}
+            </div>
+            """, unsafe_allow_html=True)
