@@ -15,22 +15,29 @@ Implement Phase P3 of the Russian Academic Naturalness Diagnostics Engine. Speci
 Users can choose from three diagnostic performance modes in the Web UI:
 
 ### Mode 1: Heuristic Filter Only (仅启发式过滤)
-- Skip PPL and LLM evaluation if a sentence is protected (formula/citation) or very short (< 6 words).
+- Skip PPL and LLM evaluation if a sentence is protected (formula/citation) or very short (< min_words).
 - User chooses a heuristic depth:
-  - **Deep Scan (全量深检)**: Scan all remaining sentences.
-  - **Smart Probe (均衡模式)**: Only scan if sentence has word count $\ge 12$ OR matches an AI cliché.
-  - **Fast Check (极速模式)**: Only scan if sentence has word count $\ge 18$ OR matches an AI cliché.
+  - **Deep Scan (全量深检)**: Scan all remaining sentences (length $\ge$ min_words).
+  - **Smart Probe (均衡模式)**: Only scan if sentence has word count $\ge$ smart_words OR matches an AI cliché.
+  - **Fast Check (极速模式)**: Only scan if sentence has word count $\ge$ fast_words OR matches an AI cliché.
+- **User Customization**: In the UI, the user can customize these parameters via sliders/inputs:
+  - `min_words`: Minimum word count for audit (default: 6).
+  - `smart_words`: Smart Probe word threshold (default: 12).
+  - `fast_words`: Fast Check word threshold (default: 18).
 
 ### Mode 2: Early-Exit Probe Only (仅早期退出探针)
 - Skip heuristic filtering (all non-protected, non-short sentences are entered).
 - Run a 2-stage PPL evaluation:
-  - **Stage 1**: Compute prefix PPL on the first 6 tokens (plus BOS, total 7 tokens).
-  - If prefix $PPL \ge 30.0$ (highly natural, low predictability), mark as `Early Exit (Natural)` and skip the rest of the sentence.
+  - **Stage 1**: Compute prefix PPL on the first $N$ tokens (plus BOS, total $N+1$ tokens).
+  - If prefix $PPL \ge$ prefix_threshold (highly natural, low predictability), mark as `Early Exit (Natural)` and skip the rest of the sentence.
   - **Stage 2**: Otherwise, compute full sentence PPL.
+- **User Customization**: In the UI, the user can customize:
+  - `prefix_tokens` ($N$): Number of tokens to evaluate for early exit (default: 6).
+  - `prefix_threshold` (prefix_threshold): PPL threshold above which a prefix is considered natural enough to early-exit (default: 30.0).
 
 ### Mode 3: Hybrid Probe (混合模式 - 默认且推荐)
-- Apply **Heuristic Filter** first based on the chosen depth (Deep Scan, Smart Probe, or Fast Check).
-- If a sentence passes the heuristic filter, run the **Early-Exit Probe** (Stage 1 prefix PPL check).
+- Apply **Heuristic Filter** first based on the chosen depth (Deep Scan, Smart Probe, or Fast Check) and customized word count thresholds.
+- If a sentence passes the heuristic filter, run the **Early-Exit Probe** (Stage 1 prefix PPL check using customized prefix tokens and threshold).
 - Only run the full PPL and LLM Judge if both gates are passed.
 
 ---
