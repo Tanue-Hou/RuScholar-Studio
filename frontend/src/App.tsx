@@ -77,7 +77,7 @@ function App() {
   
   const [discipline, setDiscipline] = useState<string>('UNIVERSAL');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'flagged' | 'integrity'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'ai' | 'flagged' | 'integrity'>('all');
   
   const [runningRisks, setRunningRisks] = useState<{
     predictability: number;
@@ -757,8 +757,10 @@ function App() {
             {(() => {
               const sortedDiagnostics = Object.values(allDiagnostics).sort((a, b) => a.index - b.index);
               const passedCount = sortedDiagnostics.filter(d => d.status !== 'flagged').length;
-              const flaggedCount = sortedDiagnostics.filter(d => d.status === 'flagged').length;
-              const integrityCount = integrityWarnings.length;
+              const aiCount = sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type === 'ai_generated_suspicion').length;
+              const styleCount = sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type !== 'ai_generated_suspicion' && d.issue_type !== 'citation_gap').length;
+              const sentenceIntegrityCount = sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type === 'citation_gap').length;
+              const integrityCount = integrityWarnings.length + sentenceIntegrityCount;
 
               return (
                 <>
@@ -768,7 +770,7 @@ function App() {
                         className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
                         onClick={() => setActiveTab('all')}
                       >
-                        全部 ({sortedDiagnostics.length + integrityCount})
+                        全部 ({sortedDiagnostics.length + integrityWarnings.length})
                       </button>
                       <button 
                         className={`tab-btn ${activeTab === 'passed' ? 'active' : ''}`}
@@ -777,10 +779,16 @@ function App() {
                         无风险 ({passedCount})
                       </button>
                       <button 
+                        className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('ai')}
+                      >
+                        AI风险 ({aiCount})
+                      </button>
+                      <button 
                         className={`tab-btn ${activeTab === 'flagged' ? 'active' : ''}`}
                         onClick={() => setActiveTab('flagged')}
                       >
-                        风格警报 ({flaggedCount})
+                        风格警报 ({styleCount})
                       </button>
                       <button 
                         className={`tab-btn ${activeTab === 'integrity' ? 'active' : ''}`}
@@ -949,14 +957,79 @@ function App() {
                     </>
                   )}
 
-                  {activeTab === 'flagged' && (
+                  {activeTab === 'ai' && (
                     <>
-                      {sortedDiagnostics.filter(d => d.status === 'flagged').map((diag) => (
+                      {sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type === 'ai_generated_suspicion').map((diag) => (
                         <div 
                           key={diag.index}
                           className="glass-card slide-in" 
                           onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
                           style={{ borderLeft: '4px solid var(--apple-red)' }}
+                        >
+                          {(() => {
+                            const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "AI 生成特征预警", color: "var(--apple-red-text)" };
+                            return (
+                              <div className="card-header" style={{ color: issueInfo.color, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                <AlertCircle size={16} color={issueInfo.color} />
+                                <span style={{ fontWeight: 600 }}>{issueInfo.title}</span>
+                              </div>
+                            );
+                          })()}
+                          
+                          <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
+                            "{diag.text.substring(0, 80)}..."
+                          </p>
+                          
+                          <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                            <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span className="text-secondary font-mono">PPL (Perplexity)</span>
+                              <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
+                            </div>
+                            <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span className="text-secondary">Issue</span>
+                              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{diag.issue_type}</span>
+                            </div>
+                            
+                            {diag.think && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
+                                  <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
+                                    ▶ View Model Reasoning
+                                  </summary>
+                                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
+                                    {diag.think}
+                                  </p>
+                                </details>
+                              </div>
+                            )}
+
+                            {diag.explanation && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Analysis</p>
+                                <p style={{ color: 'var(--apple-red-text)', fontSize: '12px', lineHeight: '1.4' }}>{diag.explanation}</p>
+                              </div>
+                            )}
+                            
+                            {diag.suggestion && diag.suggestion !== 'N/A' && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Suggestion</p>
+                                <p style={{ color: 'var(--apple-green-text)', fontWeight: 500, fontSize: '12px' }}>{diag.suggestion}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'flagged' && (
+                    <>
+                      {sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type !== 'ai_generated_suspicion' && d.issue_type !== 'citation_gap').map((diag) => (
+                        <div 
+                          key={diag.index}
+                          className="glass-card slide-in" 
+                          onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
+                          style={{ borderLeft: '4px solid var(--apple-orange)' }}
                         >
                           {(() => {
                             const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange-text)" };
@@ -1016,6 +1089,61 @@ function App() {
 
                   {activeTab === 'integrity' && (
                     <>
+                      {sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type === 'citation_gap').map((diag) => (
+                        <div 
+                          key={diag.index}
+                          className="glass-card slide-in" 
+                          onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
+                          style={{ borderLeft: '4px solid var(--apple-red)' }}
+                        >
+                          <div className="card-header" style={{ color: 'var(--apple-red-text)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <AlertCircle size={16} color="var(--apple-red-text)" />
+                            <span style={{ fontWeight: 600 }}>引用缺失风险 (Citation Gap Alert)</span>
+                          </div>
+                          
+                          <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
+                            "{diag.text.substring(0, 80)}..."
+                          </p>
+                          
+                          <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                            <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span className="text-secondary font-mono">PPL (Perplexity)</span>
+                              <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
+                            </div>
+                            <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span className="text-secondary">Issue</span>
+                              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{diag.issue_type}</span>
+                            </div>
+                            
+                            {diag.think && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
+                                  <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
+                                    ▶ View Model Reasoning
+                                  </summary>
+                                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
+                                    {diag.think}
+                                  </p>
+                                </details>
+                              </div>
+                            )}
+
+                            {diag.explanation && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Analysis</p>
+                                <p style={{ color: 'var(--apple-red-text)', fontSize: '12px', lineHeight: '1.4' }}>{diag.explanation}</p>
+                              </div>
+                            )}
+                            
+                            {diag.suggestion && diag.suggestion !== 'N/A' && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Suggestion</p>
+                                <p style={{ color: 'var(--apple-green-text)', fontWeight: 500, fontSize: '12px' }}>{diag.suggestion}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                       {integrityWarnings.length > 0 && renderIntegrityReport()}
                     </>
                   )}
