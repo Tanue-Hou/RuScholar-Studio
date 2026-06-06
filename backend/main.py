@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import asyncio
+import math
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
@@ -19,12 +20,12 @@ MODEL_PATH = "../models/Qwen3-4B-Q5_K_M.gguf"
 engine = None
 judge = None
 SKILL_RULES_PATH = os.path.expanduser("~/.gemini/config/skills/phd-thesis-butler/assets/references/polishing_rules_v5.json")
-global_skill_rules = None
+global_clusters = {}
 model_lock = asyncio.Lock()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global engine, judge, global_skill_rules
+    global engine, judge, global_clusters
     print("Loading Llama model...")
     if os.path.exists(MODEL_PATH):
         engine = PPLEngine(MODEL_PATH)
@@ -37,26 +38,11 @@ async def lifespan(app: FastAPI):
         try:
             with open(SKILL_RULES_PATH, 'r', encoding='utf-8') as f:
                 rules_data = json.load(f)
-                clusters = rules_data.get("clusters", {})
-                # Try to load AUTOMATION_CONTROL or default to first
-                global_skill_rules = clusters.get("AUTOMATION_CONTROL", next(iter(clusters.values()), None))
-                print("Loaded phd-thesis-butler polishing rules.")
+                global_clusters = rules_data.get("clusters", {})
+                print("Loaded phd-thesis-butler polishing rules clusters.")
         except Exception as e:
             print(f"Failed to load skill rules: {e}")
             
-    if not global_skill_rules:
-        # Robust fallback if file doesn't exist
-        global_skill_rules = {
-            "do_rules": [
-                "Использовать безличные и неопределенно-личные конструкции",
-                "Соблюдать строгую логическую последовательность (введение -> методы -> результаты)"
-            ],
-            "dont_rules": [
-                "Использовать местоимения первого лица (я, мы)",
-                "Использовать эмоционально-окрашенную лексику и метафоры",
-                "Злоупотреблять пассивным залогом и длинными цепочками существительных"
-            ]
-        }
     yield
     print("Shutting down...")
 
@@ -69,6 +55,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def get_discipline_rules(discipline: str) -> dict:
+    rules = global_clusters.get(discipline, global_clusters.get("UNIVERSAL", None))
+    if not rules and global_clusters:
+        rules = next(iter(global_clusters.values()), None)
+        
+    if not rules:
+        rules = {
+            "do_rules": [
+                "Использовать безличные и неопределенно-личные конструкции",
+                "Соблюдать строгую логическую последовательность (введение -> методы -> результаты)"
+            ],
+            "dont_rules": [
+                "Использовать местоимения первого лица (я, мы)",
+                "Использовать эмоционально-окрашенную лексику и метафоры",
+                "Злоупотреблять пассивным залогом и длинными цепочками существительных"
+            ]
+        }
+    return rules
 
 def parse_docx(file_bytes):
     import io
@@ -85,12 +90,67 @@ async def upload_document(file: UploadFile = File(...)):
         
     return {"status": "ok", "filename": file.filename, "text": text}
 
+@app.get("/api/detect_discipline")
+async def detect_discipline_endpoint(
+    text: str,
+    engine_type: str = "local",
+    api_key: str = "",
+    base_url: str = ""
+):
+    """
+    Zero-shot academic discipline classification endpoint.
+    Samples the first 1000 characters and identifies the academic domain cluster.
+    """
+    global engine, judge
+    judge_inst = None
+    
+    if engine_type == "local":
+        model_path = "../models/Qwen3-4B-Q5_K_M.gguf"
+        if os.path.exists(model_path):
+            if engine is None:
+                engine = PPLEngine(model_path)
+                judge = StyleJudge(engine.llm)
+            judge_inst = judge
+    else:
+        judge_inst = StyleJudge(None)
+        
+    if judge_inst is None:
+        # Fallback to simple keyword detection if local model file is missing
+        text_lower = text.lower()
+        if any(w in text_lower for w in ["управление", "робот", "автоматиз", "регулятор", "динамик", "control", "robot", "automat"]):
+            discipline = "AUTOMATION_CONTROL"
+        elif any(w in text_lower for w in ["биолог", "медиц", "клетк", "терап", "ген", "biolog", "medic", "cell", "gene"]):
+            discipline = "AGRI_MED"
+        elif any(w in text_lower for w in ["физик", "хими", "сплав", "материал", "энерг", "physic", "chemic", "material"]):
+            discipline = "SCI_TECH"
+        elif any(w in text_lower for w in ["эконом", "полити", "гуманитар", "истори", "обществ", "econom", "polit", "social"]):
+            discipline = "HUM_POL_ECON"
+        else:
+            discipline = "UNIVERSAL"
+    else:
+        try:
+            if engine_type == "local":
+                async with model_lock:
+                    discipline = await asyncio.to_thread(
+                        judge_inst.detect_discipline, text, engine_type, api_key, base_url
+                    )
+            else:
+                discipline = await asyncio.to_thread(
+                    judge_inst.detect_discipline, text, engine_type, api_key, base_url
+                )
+        except Exception as e:
+            print(f"Discipline detection failed: {e}. Falling back to UNIVERSAL.")
+            discipline = "UNIVERSAL"
+            
+    return {"discipline": discipline}
+
 @app.get("/api/diagnose")
 async def diagnose_stream(
     text: str,
     engine_type: str = "local",
     api_key: str = "",
-    base_url: str = ""
+    base_url: str = "",
+    discipline: str = "UNIVERSAL"
 ):
     """
     Server-Sent Events endpoint to stream the analysis of sentences.
@@ -125,11 +185,22 @@ async def diagnose_stream(
                 # For DeepSeek API, instantiate StyleJudge with None LLM
                 judge_inst = StyleJudge(None)
             
+            # Load dynamic rules for the specified discipline
+            active_rules = get_discipline_rules(discipline)
+            
             # Yield init event matching frontend expectations
             yield {
                 "event": "init",
-                "data": json.dumps({"total_sentences": len(sentences)})
+                "data": json.dumps({"total_sentences": len(sentences), "discipline": discipline})
             }
+            
+            # Track values for document-level Style Risk Indices
+            ppl_vals = []
+            flagged_count = 0
+            nv_ratios = []
+            passive_counts = []
+            genitive_chain_counts = []
+            cliche_counts = []
             
             for i, s in enumerate(sentences):
                 diag_rules = rules_res["sentence_diagnostics"][i]
@@ -143,7 +214,13 @@ async def diagnose_stream(
                     "explanation": None,
                     "suggestion": None,
                     "think": None,
-                    "status": "ok"
+                    "status": "ok",
+                    "metrics": {
+                        "nv_ratio": diag_rules.get("nv_ratio", 0.0),
+                        "passive_count": diag_rules.get("passive_count", 0),
+                        "genitive_chains_count": len(diag_rules.get("genitive_chains", [])),
+                        "cliches_count": len(diag_rules.get("cliches_found", []))
+                    }
                 }
                 
                 has_track_a_triggers = (
@@ -184,7 +261,7 @@ async def diagnose_stream(
                                 ppl=result.get("ppl"), 
                                 context_before=ctx_before, 
                                 context_after=ctx_after,
-                                skill_rules=global_skill_rules,
+                                skill_rules=active_rules,
                                 engine_type=engine_type,
                                 api_key=api_key,
                                 base_url=base_url
@@ -197,7 +274,7 @@ async def diagnose_stream(
                             ppl=result.get("ppl"), 
                             context_before=ctx_before, 
                             context_after=ctx_after,
-                            skill_rules=global_skill_rules,
+                            skill_rules=active_rules,
                             engine_type=engine_type,
                             api_key=api_key,
                             base_url=base_url
@@ -217,12 +294,65 @@ async def diagnose_stream(
                         result["status"] = "passed"
                 else:
                     result["status"] = "passed"
+                
+                # Append to metric trackers
+                ppl_vals.append(result["ppl"])
+                nv_ratios.append(result["metrics"]["nv_ratio"])
+                passive_counts.append(result["metrics"]["passive_count"])
+                genitive_chain_counts.append(result["metrics"]["genitive_chains_count"])
+                cliche_counts.append(result["metrics"]["cliches_count"])
+                if result["status"] == "flagged":
+                    flagged_count += 1
                     
                 yield {"event": "result", "data": json.dumps(result)}
                 # Brief pause to allow event loop to breathe
                 await asyncio.sleep(0.01)
             
-            yield {"event": "done", "data": "[]"}
+            # Calculate final document-level risks
+            ppl_evaluated = [p for p in ppl_vals if p is not None]
+            
+            # 1. Predictability Risk
+            if ppl_evaluated:
+                pred_count = sum(1 for p in ppl_evaluated if p < 15.0)
+                predictability_risk = round((pred_count / len(ppl_evaluated)) * 100, 1)
+            else:
+                predictability_risk = round((flagged_count / max(1, len(sentences))) * 100, 1)
+                
+            # 2. Uniformity Risk
+            if len(ppl_evaluated) > 1:
+                mean_ppl = sum(ppl_evaluated) / len(ppl_evaluated)
+                variance = sum((p - mean_ppl) ** 2 for p in ppl_evaluated) / len(ppl_evaluated)
+                std_dev = math.sqrt(variance)
+                uniformity_risk = round(max(0.0, min(100.0, (30.0 - std_dev) * 4.0)), 1)
+            else:
+                uniformity_risk = 0.0
+                
+            # 3. Translationese Risk
+            trans_scores = []
+            for nv, pas, gen in zip(nv_ratios, passive_counts, genitive_chain_counts):
+                nv_score = min(2.0, max(0.0, nv - 1.5)) / 2.0
+                pas_score = min(1.0, pas * 0.5)
+                gen_score = min(1.0, gen * 0.5)
+                trans_scores.append((nv_score + pas_score + gen_score) / 3.0)
+            
+            translationese_risk = round((sum(trans_scores) / max(1, len(trans_scores))) * 100, 1)
+            
+            # 4. Redundancy Risk
+            if cliche_counts:
+                cliche_sent_count = sum(1 for c in cliche_counts if c > 0)
+                redundancy_risk = round((cliche_sent_count / len(cliche_counts)) * 100, 1)
+            else:
+                redundancy_risk = 0.0
+            
+            yield {
+                "event": "done",
+                "data": json.dumps({
+                    "predictability_risk": predictability_risk,
+                    "uniformity_risk": uniformity_risk,
+                    "translationese_risk": translationese_risk,
+                    "redundancy_risk": redundancy_risk
+                })
+            }
             
         except Exception as e:
             import traceback

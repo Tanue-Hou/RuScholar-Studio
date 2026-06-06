@@ -14,10 +14,19 @@ interface DiagnosticResult {
   status: 'ok' | 'skipped_heuristic' | 'early_exit' | 'passed' | 'flagged';
 }
 
+const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string }> = {
+  SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学与工程技术)", color: "var(--apple-blue)" },
+  AUTOMATION_CONTROL: { en: "Automation & Control Engineering", zh: "自动化与控制工程", color: "var(--apple-orange)" },
+  AGRI_MED: { en: "Agricultural & Medical Sciences", zh: "农田与医药生命科学", color: "var(--apple-green)" },
+  HUM_POL_ECON: { en: "Humanities & Social Sciences", zh: "人文社科 (政治经济与社会科学)", color: "var(--apple-purple)" },
+  ARTS_SPORTS: { en: "Arts, Sports & Culture", zh: "艺术体育与文化研究", color: "var(--apple-pink)" },
+  UNIVERSAL: { en: "Universal Academic Domain", zh: "通用学术与跨学科领域", color: "var(--text-secondary)" }
+};
+
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [documentText, setDocumentText] = useState<string>('');
-  const [sentences, setSentences] = useState<{ text: string, status: string }[]>([]);
+  const [sentences, setSentences] = useState<{ text: string, status: string, ppl?: number | null, metrics?: any }[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -29,6 +38,92 @@ function App() {
   const [localModelStatus, setLocalModelStatus] = useState<'checking'|'exists'|'missing'|'downloading'>('checking');
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [stats, setStats] = useState({ flaggedCount: 0, totalPPL: 0, pplCount: 0 });
+  
+  const [discipline, setDiscipline] = useState<string>('UNIVERSAL');
+  const [finalRisks, setFinalRisks] = useState<{
+    predictability: number | null,
+    uniformity: number | null,
+    translationese: number | null,
+    redundancy: number | null
+  }>({
+    predictability: null,
+    uniformity: null,
+    translationese: null,
+    redundancy: null
+  });
+
+  const getRealTimeRisks = () => {
+    // Filter sentences that have been analyzed (status !== 'analyzing')
+    const analyzed = sentences.filter(s => s && s.status !== 'analyzing' && s.status !== 'skipped_heuristic');
+    if (analyzed.length === 0) {
+      return {
+        predictability: 0,
+        uniformity: 0,
+        translationese: 0,
+        redundancy: 0
+      };
+    }
+
+    const pplVals = analyzed.map(s => s.ppl).filter((p): p is number => p !== undefined && p !== null);
+    
+    // 1. Predictability Risk
+    let predictability = 0;
+    if (pplVals.length > 0) {
+      const predCount = pplVals.filter(p => p < 15.0).length;
+      predictability = Math.round((predCount / pplVals.length) * 100);
+    } else {
+      const flagged = analyzed.filter(s => s.status === 'flagged').length;
+      predictability = Math.round((flagged / analyzed.length) * 100);
+    }
+
+    // 2. Uniformity Risk
+    let uniformity = 0;
+    if (pplVals.length > 1) {
+      const meanPpl = pplVals.reduce((a, b) => a + b, 0) / pplVals.length;
+      const variance = pplVals.reduce((acc, p) => acc + Math.pow(p - meanPpl, 2), 0) / pplVals.length;
+      const stdDev = Math.sqrt(variance);
+      uniformity = Math.round(Math.max(0, Math.min(100, (30.0 - stdDev) * 4.0)));
+    }
+
+    // 3. Translationese Risk
+    let translationese = 0;
+    const transScores: number[] = [];
+    analyzed.forEach(s => {
+      if (s.metrics) {
+        const nv = s.metrics.nv_ratio || 0;
+        const pas = s.metrics.passive_count || 0;
+        const gen = s.metrics.genitive_chains_count || 0;
+        
+        const nvScore = Math.min(2.0, Math.max(0.0, nv - 1.5)) / 2.0;
+        const pasScore = Math.min(1.0, pas * 0.5);
+        const genScore = Math.min(1.0, gen * 0.5);
+        
+        transScores.push((nvScore + pasScore + genScore) / 3.0);
+      }
+    });
+    if (transScores.length > 0) {
+      translationese = Math.round((transScores.reduce((a, b) => a + b, 0) / transScores.length) * 100);
+    }
+
+    // 4. Redundancy Risk
+    let redundancy = 0;
+    const clicheSentences = analyzed.filter(s => s.metrics && s.metrics.cliches_count > 0).length;
+    redundancy = Math.round((clicheSentences / analyzed.length) * 100);
+
+    return {
+      predictability,
+      uniformity,
+      translationese,
+      redundancy
+    };
+  };
+
+  const runningRisks = isAnalyzing ? getRealTimeRisks() : {
+    predictability: finalRisks.predictability !== null ? finalRisks.predictability : 0,
+    uniformity: finalRisks.uniformity !== null ? finalRisks.uniformity : 0,
+    translationese: finalRisks.translationese !== null ? finalRisks.translationese : 0,
+    redundancy: finalRisks.redundancy !== null ? finalRisks.redundancy : 0
+  };
 
   useEffect(() => {
     fetch('/api/check_model')
@@ -84,20 +179,44 @@ function App() {
     }
   };
 
-  const startAnalysis = () => {
+  const startAnalysis = async () => {
     if (!documentText) return;
+
+    if (engineType === 'local' && localModelStatus === 'missing') {
+      alert("Local model is missing. Please download the Qwen GGUF model in the header first, or switch to a Cloud engine.");
+      return;
+    }
     
     setIsAnalyzing(true);
     setDiagnostics([]);
     setSentences([]);
-    
-    // Connect to SSE
     setStats({ flaggedCount: 0, totalPPL: 0, pplCount: 0 });
+    setFinalRisks({ predictability: null, uniformity: null, translationese: null, redundancy: null });
+    
+    let detectedDiscipline = 'UNIVERSAL';
+    try {
+      const detectParams = new URLSearchParams({
+        text: documentText.substring(0, 1000),
+        engine_type: engineType,
+        api_key: apiKey,
+        base_url: baseUrl
+      });
+      const detectRes = await fetch(`/api/detect_discipline?${detectParams.toString()}`);
+      const detectData = await detectRes.json();
+      detectedDiscipline = detectData.discipline || 'UNIVERSAL';
+      setDiscipline(detectedDiscipline);
+    } catch (err) {
+      console.error("Failed to detect discipline", err);
+      setDiscipline('UNIVERSAL');
+    }
+
+    // Connect to SSE
     const params = new URLSearchParams({
       text: documentText,
       engine_type: engineType,
       api_key: apiKey,
-      base_url: baseUrl
+      base_url: baseUrl,
+      discipline: detectedDiscipline
     });
     const eventSource = new EventSource(`/api/diagnose?${params.toString()}`);
     
@@ -113,7 +232,12 @@ function App() {
       
       setSentences(prev => {
         const next = [...prev];
-        next[data.index] = { text: data.text, status: data.status };
+        next[data.index] = { 
+          text: data.text, 
+          status: data.status,
+          ppl: data.ppl,
+          metrics: (data as any).metrics
+        };
         return next;
       });
       
@@ -138,8 +262,19 @@ function App() {
       setProgress(prev => ({ ...prev, current: prev.current + 1 }));
     });
     
-    eventSource.addEventListener("done", () => {
+    eventSource.addEventListener("done", (e) => {
       setIsAnalyzing(false);
+      try {
+        const doneData = JSON.parse(e.data);
+        setFinalRisks({
+          predictability: doneData.predictability_risk,
+          uniformity: doneData.uniformity_risk,
+          translationese: doneData.translationese_risk,
+          redundancy: doneData.redundancy_risk
+        });
+      } catch (err) {
+        console.error("Failed to parse done risks", err);
+      }
       eventSource.close();
     });
 
@@ -290,12 +425,26 @@ function App() {
         {/* Right Column: Diagnostics Stream */}
         <div className="column-right">
           <div className="stream-container">
-            {/* Global Stats */}
+            {file && (
+              <div className="glass-card" style={{ marginBottom: '8px', borderLeft: `4px solid ${DISCIPLINE_MAP[discipline]?.color || 'var(--text-secondary)'}`, transition: 'all 0.5s ease' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Academic Discipline / 学科领域分类
+                </div>
+                <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '4px', color: DISCIPLINE_MAP[discipline]?.color || 'var(--text-primary)' }}>
+                  {DISCIPLINE_MAP[discipline]?.en || 'Universal Academic'}
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {DISCIPLINE_MAP[discipline]?.zh || '通用学术与跨学科领域'}
+                </div>
+              </div>
+            )}
+
+            {/* Global Stats & Telemetry */}
             {progress.total > 0 && (
               <div className="glass-card" style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.03)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
                   <div>
-                    <div className="text-secondary" style={{ fontSize: '12px' }}>AI Contamination Rate</div>
+                    <div className="text-secondary" style={{ fontSize: '12px' }}>Style Risk / 风格风险率</div>
                     <div style={{ fontSize: '20px', fontWeight: 600, color: stats.flaggedCount > 0 ? 'var(--apple-red)' : 'var(--apple-green)' }}>
                       {Math.round((stats.flaggedCount / progress.total) * 100)}%
                     </div>
@@ -304,6 +453,52 @@ function App() {
                     <div className="text-secondary" style={{ fontSize: '12px' }}>Avg Perplexity (PPL)</div>
                     <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--apple-orange)' }}>
                       {stats.pplCount > 0 ? (stats.totalPPL / stats.pplCount).toFixed(1) : '-'}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', borderTop: '1px solid var(--glass-border)', paddingTop: '14px' }}>
+                  {/* 1. Predictability Risk */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Predictability Risk (可预测性风险)</span>
+                      <span style={{ fontWeight: 600, color: 'var(--apple-blue)' }}>{runningRisks.predictability}%</span>
+                    </div>
+                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${runningRisks.predictability}%`, background: 'var(--apple-blue)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                    </div>
+                  </div>
+
+                  {/* 2. Uniformity Risk */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Uniformity Risk (句式均匀性风险)</span>
+                      <span style={{ fontWeight: 600, color: 'var(--apple-purple)' }}>{runningRisks.uniformity}%</span>
+                    </div>
+                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${runningRisks.uniformity}%`, background: 'var(--apple-purple)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                    </div>
+                  </div>
+
+                  {/* 3. Translationese Risk */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Translationese Risk (翻译腔风险)</span>
+                      <span style={{ fontWeight: 600, color: 'var(--apple-orange)' }}>{runningRisks.translationese}%</span>
+                    </div>
+                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${runningRisks.translationese}%`, background: 'var(--apple-orange)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                    </div>
+                  </div>
+
+                  {/* 4. Redundancy Risk */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Redundancy Risk (语义冗余风险)</span>
+                      <span style={{ fontWeight: 600, color: 'var(--apple-red)' }}>{runningRisks.redundancy}%</span>
+                    </div>
+                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${runningRisks.redundancy}%`, background: 'var(--apple-red)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
                     </div>
                   </div>
                 </div>
