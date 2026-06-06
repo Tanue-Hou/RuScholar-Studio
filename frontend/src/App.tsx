@@ -765,37 +765,41 @@ function App() {
               return (
                 <>
                   {file && progress.total > 0 && (
-                    <div className="tabs-container">
-                      <button 
-                        className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('all')}
-                      >
-                        全部 ({sortedDiagnostics.length + integrityWarnings.length})
-                      </button>
-                      <button 
-                        className={`tab-btn ${activeTab === 'passed' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('passed')}
-                      >
-                        无风险 ({passedCount})
-                      </button>
-                      <button 
-                        className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('ai')}
-                      >
-                        AI风险 ({aiCount})
-                      </button>
-                      <button 
-                        className={`tab-btn ${activeTab === 'flagged' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('flagged')}
-                      >
-                        风格警报 ({styleCount})
-                      </button>
-                      <button 
-                        className={`tab-btn ${activeTab === 'integrity' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('integrity')}
-                      >
-                        文献异常 ({integrityCount})
-                      </button>
+                    <div className="tabs-row">
+                      <div className="tabs-container">
+                        <button 
+                          className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
+                          onClick={() => setActiveTab('all')}
+                        >
+                          全部 ({sortedDiagnostics.length + integrityWarnings.length})
+                        </button>
+                        <button 
+                          className={`tab-btn ${activeTab === 'passed' ? 'active' : ''}`}
+                          onClick={() => setActiveTab('passed')}
+                        >
+                          无风险 ({passedCount})
+                        </button>
+                      </div>
+                      <div className="tabs-container">
+                        <button 
+                          className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
+                          onClick={() => setActiveTab('ai')}
+                        >
+                          AI风险 ({aiCount})
+                        </button>
+                        <button 
+                          className={`tab-btn ${activeTab === 'flagged' ? 'active' : ''}`}
+                          onClick={() => setActiveTab('flagged')}
+                        >
+                          风格警报 ({styleCount})
+                        </button>
+                        <button 
+                          className={`tab-btn ${activeTab === 'integrity' ? 'active' : ''}`}
+                          onClick={() => setActiveTab('integrity')}
+                        >
+                          文献异常 ({integrityCount})
+                        </button>
+                      </div>
                     </div>
                   )}
 
