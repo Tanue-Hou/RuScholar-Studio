@@ -193,6 +193,7 @@ def analyze_text_rules(text: str) -> dict:
         
         sentence_diagnostics.append({
             "original_text": sent_text_restored,
+            "word_count": words_count,
             "nv_ratio": round(nv_ratio, 2),
             "passive_count": passive_count,
             "genitive_chains": list(set(genitive_chains)),
@@ -239,10 +240,8 @@ def should_run_ppl_heuristic(
     if diag_rules.get("is_protected", False):
         return False
         
-    text = diag_rules.get("original_text", "")
-    # Count whitespace-separated words, excluding placeholder tags
-    words = [w for w in text.split() if not w.startswith("__PROTECTED_")]
-    word_count = len(words)
+    # Count words using the pre-calculated true word count
+    word_count = diag_rules.get("word_count", len(diag_rules.get("original_text", "").split()))
     
     # Absolute minimum word count
     if word_count < min_words:

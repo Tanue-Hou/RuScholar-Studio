@@ -11,7 +11,8 @@ class PPLEngine:
         self, 
         sentence: str, 
         early_exit_tokens: int = 0, 
-        early_exit_threshold: float = 0.0
+        early_exit_lower: float = 15.0,
+        early_exit_upper: float = 80.0
     ) -> tuple[float, bool]:
         """
         Evaluate PPL of a sentence without generating new tokens.
@@ -40,7 +41,9 @@ class PPLEngine:
                 nll -= log_probs[target_token]
                 
             prefix_ppl = math.exp(nll / (k - 1))
-            if prefix_ppl >= early_exit_threshold:
+            # Early exit ONLY if PPL is in the safe middle range.
+            # Very low (< lower) = AI generated. Very high (> upper) = Bad translation.
+            if early_exit_lower <= prefix_ppl <= early_exit_upper:
                 return prefix_ppl, True
                 
         # 2. Stage 2: Full evaluation (either early exit was disabled, sentence too short, or prefix was not natural enough)

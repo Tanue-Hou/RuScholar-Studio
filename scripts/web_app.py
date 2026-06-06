@@ -470,10 +470,22 @@ if uploaded_file is not None:
                             skipped_count += 1
                         else:
                             scanned_count += 1
-                            # 2. Check Early-Exit Probe (Mode 2 & Mode 3)
-                            ee_tokens = early_exit_tokens if selected_mode in ["Early-Exit", "Hybrid"] else 0
-                            ee_threshold = early_exit_threshold if selected_mode in ["Early-Exit", "Hybrid"] else 0.0
+                            # We only run early-exit if the sentence has NO Track A triggers!
+                            has_track_a_triggers = (
+                                len(diag_rules.get("cliches_found", [])) > 0 or
+                                len(diag_rules.get("genitive_chains", [])) > 0 or
+                                diag_rules.get("nv_ratio", 0.0) > 4.0 or
+                                diag_rules.get("passive_count", 0) > 0
+                            )
                             
+                            # 2. Check Early-Exit Probe (Mode 2 & Mode 3)
+                            if selected_mode in ["Early-Exit", "Hybrid"] and not has_track_a_triggers:
+                                ee_tokens = early_exit_tokens
+                                ee_threshold = early_exit_threshold
+                            else:
+                                ee_tokens = 0
+                                ee_threshold = 0.0
+                                
                             ppl, was_early_exited = engine.evaluate_sentence_ppl(
                                 s, 
                                 early_exit_tokens=ee_tokens, 
@@ -484,7 +496,7 @@ if uploaded_file is not None:
                                 early_exit_count += 1
                                 is_suspicious = False
                             else:
-                                is_suspicious = ppl < 15.0 or len(diag_rules["cliches_found"]) > 0 or len(diag_rules["genitive_chains"]) > 0 or diag_rules["nv_ratio"] > 4.0
+                                is_suspicious = ppl < 15.0 or has_track_a_triggers
                                 
                                 if is_suspicious:
                                     diag = judge.diagnose_sentence(s, stats=diag_rules, ppl=ppl)

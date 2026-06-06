@@ -64,15 +64,36 @@ def main():
         suggestion = "-"
         
         if run_ppl:
-            ppl, was_early_exited = engine.evaluate_sentence_ppl(s, early_exit_tokens=6, early_exit_threshold=30.0)
+            # We only run early-exit if the sentence has NO Track A triggers!
+            has_track_a_triggers = (
+                len(diag_rules.get("cliches_found", [])) > 0 or
+                len(diag_rules.get("genitive_chains", [])) > 0 or
+                diag_rules.get("nv_ratio", 0.0) > 4.0 or
+                diag_rules.get("passive_count", 0) > 0
+            )
+            
+            if not has_track_a_triggers:
+                ee_tokens = 6
+                ee_lower = 15.0
+                ee_upper = 80.0
+            else:
+                ee_tokens = 0
+                ee_lower = 0.0
+                ee_upper = float('inf')
+                
+            ppl, was_early_exited = engine.evaluate_sentence_ppl(s, early_exit_tokens=ee_tokens, early_exit_lower=ee_lower, early_exit_upper=ee_upper)
             
             if was_early_exited:
                 issue_type = "SKIP (Early Exit)"
             else:
-                is_suspicious = ppl < 15.0 or len(diag_rules["cliches_found"]) > 0 or len(diag_rules["genitive_chains"]) > 0 or diag_rules["nv_ratio"] > 4.0
+                is_suspicious = ppl < 15.0 or ppl > 80.0 or has_track_a_triggers
                 
                 if is_suspicious:
                     diag = judge.diagnose_sentence(s, stats=diag_rules, ppl=ppl)
+                    if "error" in diag:
+                        console.print(f"[red]LLM Judge Error: {diag['error']}[/red]")
+                        console.print(f"[red]Raw LLM output: {diag['raw']}[/red]")
+                        
                     issues = diag.get("issues", [])
                     if issues:
                         issue = issues[0]
@@ -85,6 +106,11 @@ def main():
             issue_type = "SKIP (Heuristic)"
             
         ppl_str = f"{ppl:.2f}" if ppl is not None else "N/A"
+        
+        # Real-time print to console to prevent hanging perception
+        console.print(f"[bold cyan]Sentence {i+1}/{len(rules_res['sentences'])}:[/bold cyan] {s[:40]}...")
+        console.print(f"  PPL: {ppl_str} | Issue: {issue_type} | Suggestion: {suggestion[:30]}...")
+        
         table.add_row(s[:40]+"...", ppl_str, issue_type, explanation, suggestion)
         
     console.print(table)
