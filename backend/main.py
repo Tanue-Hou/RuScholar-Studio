@@ -134,14 +134,19 @@ async def detect_discipline_endpoint(req: DetectDisciplineRequest):
     global engine, judge
     judge_inst = None
     
-    if req.engine_type == "local":
+    # Prioritize cloud API classification if api_key is provided
+    use_cloud = bool(req.api_key and req.api_key.strip())
+    
+    if use_cloud:
+        actual_engine = "deepseek-v4-flash" if "flash" in req.engine_type else "deepseek-v4-pro"
+        judge_inst = StyleJudge(None)
+    else:
+        actual_engine = "local"
         if os.path.exists(MODEL_PATH):
             if engine is None:
                 engine = PPLEngine(MODEL_PATH)
                 judge = StyleJudge(engine.llm)
             judge_inst = judge
-    else:
-        judge_inst = StyleJudge(None)
         
     if judge_inst is None:
         # Fallback to simple keyword detection if local model file is missing
@@ -158,14 +163,14 @@ async def detect_discipline_endpoint(req: DetectDisciplineRequest):
             discipline = "UNIVERSAL"
     else:
         try:
-            if req.engine_type == "local":
+            if actual_engine == "local":
                 async with model_lock:
                     discipline = await asyncio.to_thread(
-                        judge_inst.detect_discipline, req.text, req.engine_type, req.api_key, req.base_url
+                        judge_inst.detect_discipline, req.text, actual_engine, req.api_key, req.base_url
                     )
             else:
                 discipline = await asyncio.to_thread(
-                    judge_inst.detect_discipline, req.text, req.engine_type, req.api_key, req.base_url
+                    judge_inst.detect_discipline, req.text, actual_engine, req.api_key, req.base_url
                 )
         except Exception as e:
             print(f"Discipline detection failed: {e}. Falling back to keywords.")
@@ -416,10 +421,11 @@ async def diagnose_stream(session_id: str):
                                 res_dict["think"] = f"【专家模型判定】深度扫描检测到可疑特征：{res_dict['explanation']}"
                         else:
                             res_dict["status"] = "passed"
-                            res_dict["think"] = (
-                                f"【深度扫描通过】句子经专家大模型多维度推理评估，尽管 Perplexity 偏离或有轻微规则触碰，"
-                                f"但其整体语义连贯、学术表述符合规范，无显著的机器翻译或 AI 生成痕迹。"
-                            )
+                            if not res_dict["think"]:
+                                res_dict["think"] = (
+                                    f"【深度扫描通过】句子经专家大模型多维度推理评估，尽管 Perplexity 偏离或有轻微规则触碰，"
+                                    f"但其整体语义连贯、学术表述符合规范，无显著的机器翻译或 AI 生成痕迹。"
+                                )
                     else:
                         res_dict["status"] = "passed"
                         res_dict["think"] = (
@@ -509,13 +515,16 @@ async def diagnose_stream(session_id: str):
                         ctx_before = sentences[max(0, idx-2):idx]
                         ctx_after = sentences[idx+1:min(len(sentences), idx+3)]
                         
+                        compute_local_ppl = engine_type.startswith("hybrid")
                         ppl_val = None
-                        if engine_inst:
+                        if compute_local_ppl and engine_inst:
                             async with model_lock:
                                 ppl_val, _ = await asyncio.to_thread(
                                     engine_inst.evaluate_sentence_ppl, text_str, 0, 0.0, float('inf')
                                 )
                                 ppl_val = round(ppl_val, 2) if ppl_val else None
+
+                        actual_cloud_model = "deepseek-v4-flash" if "flash" in engine_type else "deepseek-v4-pro"
 
                         diag = await asyncio.to_thread(
                             judge_inst.diagnose_sentence, 
@@ -525,7 +534,7 @@ async def diagnose_stream(session_id: str):
                             context_before=ctx_before, 
                             context_after=ctx_after,
                             skill_rules=active_rules,
-                            engine_type=engine_type,
+                            engine_type=actual_cloud_model,
                             api_key=api_key,
                             base_url=base_url
                         )
@@ -547,10 +556,11 @@ async def diagnose_stream(session_id: str):
                                 res_dict["think"] = f"【专家模型判定】深度扫描检测到可疑特征：{res_dict['explanation']}"
                         else:
                             res_dict["status"] = "passed"
-                            res_dict["think"] = (
-                                f"【云端深度扫描通过】大模型全面评估通过。估算 Perplexity 值为 {res_dict.get('ppl')}，"
-                                f"行文表达逻辑严密、流畅，符合标准俄语学术写作表达规范。"
-                            )
+                            if not res_dict["think"]:
+                                res_dict["think"] = (
+                                    f"【云端深度扫描通过】大模型全面评估通过。估算 Perplexity 值为 {res_dict.get('ppl')}，"
+                                    f"行文表达逻辑严密、流畅，符合标准俄语学术写作表达规范。"
+                                )
                             
                     return res_dict
 

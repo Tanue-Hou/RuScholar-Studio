@@ -59,7 +59,6 @@ function App() {
   const [file, setFile] = useState<File | null>(null);
   const [documentText, setDocumentText] = useState<string>('');
   const [sentences, setSentences] = useState<SentenceItem[]>([]);
-  const [diagnostics, setDiagnostics] = useState<DiagnosticResult[]>([]);
   const [integrityWarnings, setIntegrityWarnings] = useState<DiagnosticResult[]>([]);
   const [allDiagnostics, setAllDiagnostics] = useState<Record<number, DiagnosticResult>>({});
   const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
@@ -78,6 +77,7 @@ function App() {
   
   const [discipline, setDiscipline] = useState<string>('UNIVERSAL');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'flagged' | 'integrity'>('all');
   
   const [runningRisks, setRunningRisks] = useState<{
     predictability: number;
@@ -171,7 +171,6 @@ function App() {
     }
     
     setIsAnalyzing(true);
-    setDiagnostics([]);
     setIntegrityWarnings([]);
     setAllDiagnostics({});
     setSelectedSentenceIndex(null);
@@ -263,12 +262,8 @@ function App() {
         return { flaggedCount: newFlagged, totalPPL: newTotalPPL, pplCount: newPplCount };
       });
       
-      if (data.status === 'flagged') {
-        if (data.index >= 0) {
-          setDiagnostics(prev => [...prev, data]);
-        } else {
-          setIntegrityWarnings(prev => [...prev, data]);
-        }
+      if (data.index < 0) {
+        setIntegrityWarnings(prev => [...prev, data]);
       }
       
       if (data.index >= 0) {
@@ -326,6 +321,40 @@ function App() {
     };
   };
 
+  const renderIntegrityReport = () => (
+    <div className="glass-card slide-in" style={{ 
+      marginTop: '16px', 
+      borderLeft: '4px solid var(--apple-red-text)'
+    }}>
+      <div className="card-header" style={{ color: 'var(--apple-red-text)', marginBottom: '8px' }}>
+        <AlertCircle size={16} color="var(--apple-red-text)" />
+        <span style={{ fontWeight: 600 }}>参考文献规范与完整性报告 (Citation Integrity Report)</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+        {integrityWarnings.map((w, idx) => (
+          <div key={idx} style={{ 
+            background: 'var(--card-inner-bg)', 
+            borderRadius: '8px', 
+            padding: '10px 12px', 
+            fontSize: '13px' 
+          }}>
+            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+              {w.text}
+            </div>
+            <div style={{ color: 'var(--apple-orange-text)', marginBottom: '4px' }}>
+              {w.explanation}
+            </div>
+            {w.suggestion && w.suggestion !== '-' && (
+              <div style={{ color: 'var(--apple-green-text)', fontSize: '12px', fontWeight: 500 }}>
+                💡 建议: {w.suggestion}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   const scrollToSentence = (index: number) => {
     setTimeout(() => {
       if (index >= 0 && sentenceRefs.current[index]) {
@@ -357,17 +386,19 @@ function App() {
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <select 
+          <select 
             value={engineType} 
             onChange={e => setEngineType(e.target.value)}
             style={{ backgroundColor: 'var(--glass-bg)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '13px' }}
           >
             <option value="local">Local: Qwen3-4B-GGUF</option>
-            <option value="deepseek-v4-pro">Cloud: DeepSeek V4 Pro</option>
-            <option value="deepseek-v4-flash">Cloud: DeepSeek V4 Flash</option>
+            <option value="hybrid-pro">Hybrid: Local PPL + DeepSeek Pro</option>
+            <option value="hybrid-flash">Hybrid: Local PPL + DeepSeek Flash</option>
+            <option value="cloud-pro">Cloud: Pure DeepSeek Pro</option>
+            <option value="cloud-flash">Cloud: Pure DeepSeek Flash</option>
           </select>
           
-          {engineType.startsWith('deepseek') && (
+          {engineType !== 'local' && (
             <div style={{ display: 'flex', gap: '8px' }}>
               <input 
                 type="text" 
@@ -723,99 +754,274 @@ function App() {
               </div>
             )}
 
-            {diagnostics.map((diag, i) => (
-              <div 
-                key={i} 
-                className="glass-card slide-in" 
-                onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
-              >
-                {(() => {
-                  const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange-text)" };
-                  return (
-                    <div className="card-header" style={{ color: issueInfo.color }}>
-                      <AlertCircle size={16} color={issueInfo.color} />
-                      <span>{issueInfo.title}</span>
-                    </div>
-                  );
-                })()}
-                
-                <p style={{ fontSize: '15px', color: 'var(--text-primary)', marginBottom: '12px' }}>
-                  "{diag.text.substring(0, 80)}..."
-                </p>
-                
-                <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
-                  <div className="metric-row" style={{ marginTop: 0 }}>
-                    <span className="text-secondary font-mono">PPL (Perplexity)</span>
-                    <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl}</span>
-                  </div>
-                  <div className="metric-row">
-                    <span className="text-secondary">Issue</span>
-                    <span style={{ fontWeight: 500 }}>{diag.issue_type}</span>
-                  </div>
-                  
-                  {diag.think && (
-                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
-                      <details style={{ cursor: 'pointer' }}>
-                        <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none' }}>
-                          ▶ View Model Reasoning
-                        </summary>
-                        <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '8px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)' }}>
-                          {diag.think}
-                        </p>
-                      </details>
+            {(() => {
+              const sortedDiagnostics = Object.values(allDiagnostics).sort((a, b) => a.index - b.index);
+              const passedCount = sortedDiagnostics.filter(d => d.status !== 'flagged').length;
+              const flaggedCount = sortedDiagnostics.filter(d => d.status === 'flagged').length;
+              const integrityCount = integrityWarnings.length;
+
+              return (
+                <>
+                  {file && progress.total > 0 && (
+                    <div className="tabs-container">
+                      <button 
+                        className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('all')}
+                      >
+                        全部 ({sortedDiagnostics.length + integrityCount})
+                      </button>
+                      <button 
+                        className={`tab-btn ${activeTab === 'passed' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('passed')}
+                      >
+                        无风险 ({passedCount})
+                      </button>
+                      <button 
+                        className={`tab-btn ${activeTab === 'flagged' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('flagged')}
+                      >
+                        风格警报 ({flaggedCount})
+                      </button>
+                      <button 
+                        className={`tab-btn ${activeTab === 'integrity' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('integrity')}
+                      >
+                        文献异常 ({integrityCount})
+                      </button>
                     </div>
                   )}
-                  
-                  {diag.explanation && (
-                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
-                      <p className="text-secondary" style={{ marginBottom: '4px' }}>Analysis</p>
-                      <p style={{ color: diag.issue_type === 'json_parse_error' ? 'var(--apple-red-text)' : 'var(--apple-orange-text)' }}>{diag.explanation}</p>
-                    </div>
+
+                  {activeTab === 'all' && (
+                    <>
+                      {sortedDiagnostics.map((diag) => (
+                        diag.status === 'flagged' ? (
+                          <div 
+                            key={diag.index}
+                            className="glass-card slide-in" 
+                            onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
+                            style={{ borderLeft: '4px solid var(--apple-red)' }}
+                          >
+                            {(() => {
+                              const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange-text)" };
+                              return (
+                                <div className="card-header" style={{ color: issueInfo.color, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                  <AlertCircle size={16} color={issueInfo.color} />
+                                  <span style={{ fontWeight: 600 }}>{issueInfo.title}</span>
+                                </div>
+                              );
+                            })()}
+                            
+                            <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
+                              "{diag.text.substring(0, 80)}..."
+                            </p>
+                            
+                            <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                              <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span className="text-secondary font-mono">PPL (Perplexity)</span>
+                                <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
+                              </div>
+                              <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span className="text-secondary">Issue</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{diag.issue_type}</span>
+                              </div>
+                              
+                              {diag.think && (
+                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                  <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
+                                    <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
+                                      ▶ View Model Reasoning
+                                    </summary>
+                                    <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
+                                      {diag.think}
+                                    </p>
+                                  </details>
+                                </div>
+                              )}
+
+                              {diag.explanation && (
+                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                  <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Analysis</p>
+                                  <p style={{ color: diag.issue_type === 'json_parse_error' ? 'var(--apple-red-text)' : 'var(--apple-orange-text)', fontSize: '12px', lineHeight: '1.4' }}>{diag.explanation}</p>
+                                </div>
+                              )}
+                              
+                              {diag.suggestion && diag.suggestion !== 'N/A' && (
+                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                  <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Suggestion</p>
+                                  <p style={{ color: 'var(--apple-green-text)', fontWeight: 500, fontSize: '12px' }}>{diag.suggestion}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div 
+                            key={diag.index}
+                            className="glass-card slide-in passed-card" 
+                            onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
+                            style={{ borderLeft: '4px solid var(--apple-green)' }}
+                          >
+                            <div className="card-header" style={{ color: 'var(--apple-green-text)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                              <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--apple-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>✓</div>
+                              <span style={{ fontWeight: 600 }}>无风险 (Passed / Clean Style)</span>
+                            </div>
+                            
+                            <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
+                              "{diag.text.substring(0, 80)}..."
+                            </p>
+                            
+                            <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                              <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span className="text-secondary font-mono">PPL (Perplexity)</span>
+                                <span className="metric-value font-mono" style={{ color: 'var(--apple-green-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
+                              </div>
+                              <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span className="text-secondary">Status</span>
+                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                                  {diag.status === 'early_exit' ? '安全通过 (Early Exit)' : '专家通过 (Passed)'}
+                                </span>
+                              </div>
+                              
+                              {diag.think && (
+                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                  <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
+                                    <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
+                                      ▶ View Model Reasoning
+                                    </summary>
+                                    <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
+                                      {diag.think}
+                                    </p>
+                                  </details>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      ))}
+                      {integrityWarnings.length > 0 && renderIntegrityReport()}
+                    </>
                   )}
-                  
-                  {diag.suggestion && diag.suggestion !== 'N/A' && (
-                    <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
-                      <p className="text-secondary" style={{ marginBottom: '4px' }}>Suggestion</p>
-                      <p style={{ color: 'var(--apple-green-text)', fontWeight: 500 }}>{diag.suggestion}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-            
-            {integrityWarnings.length > 0 && (
-              <div className="glass-card slide-in" style={{ 
-                marginTop: '16px', 
-                borderLeft: '4px solid var(--apple-red-text)'
-              }}>
-                <div className="card-header" style={{ color: 'var(--apple-red-text)', marginBottom: '8px' }}>
-                  <AlertCircle size={16} color="var(--apple-red-text)" />
-                  <span style={{ fontWeight: 600 }}>参考文献规范与完整性报告 (Citation Integrity Report)</span>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-                  {integrityWarnings.map((w, idx) => (
-                    <div key={idx} style={{ 
-                      background: 'var(--card-inner-bg)', 
-                      borderRadius: '8px', 
-                      padding: '10px 12px', 
-                      fontSize: '13px' 
-                    }}>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                        {w.text}
-                      </div>
-                      <div style={{ color: 'var(--apple-orange-text)', marginBottom: '4px' }}>
-                        {w.explanation}
-                      </div>
-                      {w.suggestion && w.suggestion !== '-' && (
-                        <div style={{ color: 'var(--apple-green-text)', fontSize: '12px', fontWeight: 500 }}>
-                          💡 建议: {w.suggestion}
+
+                  {activeTab === 'passed' && (
+                    <>
+                      {sortedDiagnostics.filter(d => d.status !== 'flagged').map((diag) => (
+                        <div 
+                          key={diag.index}
+                          className="glass-card slide-in passed-card" 
+                          onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
+                          style={{ borderLeft: '4px solid var(--apple-green)' }}
+                        >
+                          <div className="card-header" style={{ color: 'var(--apple-green-text)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--apple-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>✓</div>
+                            <span style={{ fontWeight: 600 }}>无风险 (Passed / Clean Style)</span>
+                          </div>
+                          
+                          <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
+                            "{diag.text.substring(0, 80)}..."
+                          </p>
+                          
+                          <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                            <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span className="text-secondary font-mono">PPL (Perplexity)</span>
+                              <span className="metric-value font-mono" style={{ color: 'var(--apple-green-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
+                            </div>
+                            <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span className="text-secondary">Status</span>
+                              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
+                                {diag.status === 'early_exit' ? '安全通过 (Early Exit)' : '专家通过 (Passed)'}
+                              </span>
+                            </div>
+                            
+                            {diag.think && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
+                                  <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
+                                    ▶ View Model Reasoning
+                                  </summary>
+                                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
+                                    {diag.think}
+                                  </p>
+                                </details>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'flagged' && (
+                    <>
+                      {sortedDiagnostics.filter(d => d.status === 'flagged').map((diag) => (
+                        <div 
+                          key={diag.index}
+                          className="glass-card slide-in" 
+                          onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
+                          style={{ borderLeft: '4px solid var(--apple-red)' }}
+                        >
+                          {(() => {
+                            const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange-text)" };
+                            return (
+                              <div className="card-header" style={{ color: issueInfo.color, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                <AlertCircle size={16} color={issueInfo.color} />
+                                <span style={{ fontWeight: 600 }}>{issueInfo.title}</span>
+                              </div>
+                            );
+                          })()}
+                          
+                          <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
+                            "{diag.text.substring(0, 80)}..."
+                          </p>
+                          
+                          <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                            <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span className="text-secondary font-mono">PPL (Perplexity)</span>
+                              <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
+                            </div>
+                            <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                              <span className="text-secondary">Issue</span>
+                              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{diag.issue_type}</span>
+                            </div>
+                            
+                            {diag.think && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
+                                  <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
+                                    ▶ View Model Reasoning
+                                  </summary>
+                                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
+                                    {diag.think}
+                                  </p>
+                                </details>
+                              </div>
+                            )}
+
+                            {diag.explanation && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Analysis</p>
+                                <p style={{ color: diag.issue_type === 'json_parse_error' ? 'var(--apple-red-text)' : 'var(--apple-orange-text)', fontSize: '12px', lineHeight: '1.4' }}>{diag.explanation}</p>
+                              </div>
+                            )}
+                            
+                            {diag.suggestion && diag.suggestion !== 'N/A' && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Suggestion</p>
+                                <p style={{ color: 'var(--apple-green-text)', fontWeight: 500, fontSize: '12px' }}>{diag.suggestion}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+
+                  {activeTab === 'integrity' && (
+                    <>
+                      {integrityWarnings.length > 0 && renderIntegrityReport()}
+                    </>
+                  )}
+                </>
+              );
+            })()}
             
             {isAnalyzing && (
               <div className="glass-card" style={{ opacity: 0.5, display: 'flex', justifyContent: 'center', padding: '24px' }}>

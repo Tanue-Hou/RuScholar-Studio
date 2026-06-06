@@ -269,3 +269,49 @@ h1, h2, h3, h4 {
   background-color: rgba(10, 132, 255, 0.18) !important;
   border-bottom: 2px solid var(--apple-blue);
 }
+
+/* Tabs styling */
+.tabs-container {
+  display: flex;
+  background: var(--card-inner-bg);
+  border-radius: 8px;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tab-btn.active {
+  color: var(--text-primary);
+  background: var(--glass-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+body.light-theme .tab-btn.active {
+  background: var(--card-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Passed Card special style override */
+.glass-card.passed-card:hover {
+  border-color: rgba(52, 199, 89, 0.4);
+}

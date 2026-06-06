@@ -6,6 +6,13 @@ class StyleJudge:
         self.llm = llm_instance
         
     def detect_discipline(self, text_snippet: str, engine_type: str = "local", api_key: str = "", base_url: str = "") -> str:
+        # Map input engine type to API model names if needed
+        api_engine = engine_type
+        if "pro" in engine_type:
+            api_engine = "deepseek-v4-pro"
+        elif "flash" in engine_type:
+            api_engine = "deepseek-v4-flash"
+
         sys_prompt = """You are an academic classifier. Your task is to analyze the provided text snippet from a research paper or thesis and classify it into exactly one of the following academic discipline clusters:
 - SCI_TECH (Physical sciences, engineering, chemistry, physics, excluding automation)
 - AUTOMATION_CONTROL (Automation, control theory, robotics, systems engineering, cybernetics)
@@ -21,11 +28,11 @@ You must return a JSON object containing exactly one key "discipline" with the c
         
         raw_text = ""
         try:
-            if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash"):
-                raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, user_prompt)
+            if api_engine in ("deepseek-v4-pro", "deepseek-v4-flash"):
+                raw_text = self._call_deepseek_api(api_engine, api_key, base_url, sys_prompt, user_prompt)
             else:
-                prompt = f"<|im_start|>system\n{sys_prompt}\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n"
-                response = self.llm(prompt, max_tokens=512, stop=["<|im_end|>"])
+                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. Write the final JSON object clearly.\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n"
+                response = self.llm(prompt, max_tokens=1024, stop=["<|im_end|>"])
                 raw_text = response["choices"][0]["text"].strip()
                 
             _, cleaned_text = self._clean_json_text(raw_text)
