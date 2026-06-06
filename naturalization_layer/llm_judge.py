@@ -87,10 +87,11 @@ You must return a JSON object containing exactly one key "discipline" with the c
 2. Высокий PPL (> 80.0) указывает на неестественность, плохой перевод или грамматическую перегруженность. Если также много пассивного залога или нагромождение родительного падежа, классифицируй как "machine_translation_cliche" или "style_heavy".
 3. Обязательно укажи конкретную фразу-доказательство (evidence) и объясни причину на русском и китайском языках.
 4. Предложи зрелый академический вариант переписывания (rewrite_suggestion). При переписывании опирайся на ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ и Контекст!
-5. Если предложение действительно естественное и живое, верни пустой список "issues": [].
+6. В ключе "estimated_perplexity" обязательно укажи численную оценку perplexity предложения (дробное число от 5.0 до 150.0): от 10.0 до 15.0 для гладкого/шаблонного/подозреваемого в ИИ-генерации текста; от 30.0 до 50.0 для естественного академического текста человека; более 80.0 для тяжелого/перегруженного перевода.
 
 Ответь СТРОГО в формате JSON:
 {{
+  "estimated_perplexity": 24.5,
   "issues": [
     {{
       "issue_type": "ai_generated_suspicion", 
@@ -118,6 +119,13 @@ You must return a JSON object containing exactly one key "discipline" with the c
         try:
             res = json.loads(cleaned_text)
             res["think"] = think_content
+            if "estimated_perplexity" in res:
+                try:
+                    res["estimated_perplexity"] = float(res["estimated_perplexity"])
+                except:
+                    res["estimated_perplexity"] = None
+            else:
+                res["estimated_perplexity"] = None
             return res
         except Exception as e:
             return {
