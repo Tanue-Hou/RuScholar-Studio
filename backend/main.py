@@ -22,7 +22,7 @@ from naturalization_layer.source_similarity import check_source_similarity
 from naturalization_layer.citation_integrity import check_citation_integrity
 import docx
 
-MODEL_PATH = "../models/Qwen3-4B-Q5_K_M.gguf"
+MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models/Qwen3-4B-Q5_K_M.gguf")
 engine = None
 judge = None
 SKILL_RULES_PATH = os.path.expanduser("~/.gemini/config/skills/phd-thesis-butler/assets/references/polishing_rules_v5.json")
@@ -122,10 +122,9 @@ async def detect_discipline_endpoint(req: DetectDisciplineRequest):
     judge_inst = None
     
     if req.engine_type == "local":
-        model_path = "../models/Qwen3-4B-Q5_K_M.gguf"
-        if os.path.exists(model_path):
+        if os.path.exists(MODEL_PATH):
             if engine is None:
-                engine = PPLEngine(model_path)
+                engine = PPLEngine(MODEL_PATH)
                 judge = StyleJudge(engine.llm)
             judge_inst = judge
     else:
@@ -218,11 +217,10 @@ async def diagnose_stream(session_id: str):
             judge_inst = None
             
             if engine_type == "local":
-                model_path = "../models/Qwen3-4B-Q5_K_M.gguf"
-                if os.path.exists(model_path):
+                if os.path.exists(MODEL_PATH):
                     global engine, judge
                     if engine is None:
-                        engine = PPLEngine(model_path)
+                        engine = PPLEngine(MODEL_PATH)
                         judge = StyleJudge(engine.llm)
                     engine_inst = engine
                     judge_inst = judge
