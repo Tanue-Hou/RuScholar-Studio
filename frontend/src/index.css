@@ -7,6 +7,9 @@
   --glass-bg: rgba(255, 255, 255, 0.04);
   --glass-border: rgba(255, 255, 255, 0.08);
   
+  --card-bg: rgba(28, 28, 30, 0.7);
+  --header-bg: rgba(0, 0, 0, 0.75);
+  
   --apple-red: #FF453A;
   --apple-red-bg: rgba(255, 69, 58, 0.15);
   --apple-orange: #FF9F0A;
@@ -22,14 +25,17 @@
 body.light-theme {
   --bg-color: #F2F2F7;
   --text-primary: #1C1C1E;
-  --text-secondary: #8E8E93;
-  --text-tertiary: #C7C7CC;
+  --text-secondary: #48484A;
+  --text-tertiary: #6E6E73;
   
   --glass-bg: rgba(0, 0, 0, 0.04);
   --glass-border: rgba(0, 0, 0, 0.08);
   
+  --card-bg: rgba(255, 255, 255, 0.85);
+  --header-bg: rgba(255, 255, 255, 0.8);
+  
   --apple-red: #FF3B30;
-  --apple-red-bg: rgba(255, 59, 48, 0.1);
+  --apple-red-bg: rgba(255, 59, 48, 0.15);
   --apple-orange: #FF9500;
   --apple-green: #34C759;
   --apple-blue: #007AFF;
@@ -74,7 +80,7 @@ h1, h2, h3, h4 {
 }
 
 .glass-card {
-  background: rgba(28, 28, 30, 0.6);
+  background: var(--card-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
@@ -102,7 +108,7 @@ h1, h2, h3, h4 {
   align-items: center;
   padding: 0 24px;
   border-bottom: 1px solid var(--glass-border);
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--header-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   z-index: 100;
@@ -137,7 +143,7 @@ h1, h2, h3, h4 {
   margin: 0 auto;
   font-size: 17px;
   line-height: 1.6;
-  color: #D1D1D6;
+  color: var(--text-primary);
 }
 
 .sentence {

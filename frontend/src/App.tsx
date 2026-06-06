@@ -37,12 +37,22 @@ interface SentenceItem {
 }
 
 const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string }> = {
-  SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学与工程技术)", color: "var(--apple-blue)" },
+  SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学⟣工程技术)", color: "var(--apple-blue)" },
   AUTOMATION_CONTROL: { en: "Automation & Control Engineering", zh: "自动化与控制工程", color: "var(--apple-orange)" },
   AGRI_MED: { en: "Agricultural & Medical Sciences", zh: "农田与医药生命科学", color: "var(--apple-green)" },
   HUM_POL_ECON: { en: "Humanities & Social Sciences", zh: "人文社科 (政治经济与社会科学)", color: "var(--apple-purple)" },
   ARTS_SPORTS: { en: "Arts, Sports & Culture", zh: "艺术体育与文化研究", color: "var(--apple-pink)" },
   UNIVERSAL: { en: "Universal Academic Domain", zh: "通用学术与跨学科领域", color: "var(--text-secondary)" }
+};
+
+const ISSUE_TITLE_MAP: Record<string, { title: string; color: string }> = {
+  ai_generated_suspicion: { title: "AI 生成特征预警 (AI Writing Detected)", color: "var(--apple-red)" },
+  machine_translation_cliche: { title: "机器翻译与学术套话 (Translationese & Cliché)", color: "var(--apple-orange)" },
+  citation_gap: { title: "引用缺失风险 (Citation Gap Alert)", color: "var(--apple-red)" },
+  semantic_plagiarism_risk: { title: "学术改写重合风险 (High Similarity Risk)", color: "var(--apple-orange)" },
+  style_heavy: { title: "句式臃肿与冗余 (Style Overloaded)", color: "var(--apple-purple)" },
+  json_parse_error: { title: "格式解析异常 (Formatting Parse Alert)", color: "var(--text-secondary)" },
+  api_request_error: { title: "云端服务连接异常 (API Connection Alert)", color: "var(--text-secondary)" },
 };
 
 function App() {
@@ -56,6 +66,7 @@ function App() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   
   const sentenceRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const [engineType, setEngineType] = useState('local');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('https://api.deepseek.com/v1');
@@ -140,6 +151,15 @@ function App() {
     }
   };
 
+  const stopAnalysis = () => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    setIsAnalyzing(false);
+    setSentences(prev => prev.map(s => s.status === 'analyzing' ? { ...s, status: 'skipped' } : s));
+  };
+
   const startAnalysis = async () => {
     if (!documentText) return;
 
@@ -201,6 +221,7 @@ function App() {
 
     // Connect to SSE using session_id
     const eventSource = new EventSource(`/api/diagnose?session_id=${sessionId}`);
+    eventSourceRef.current = eventSource;
     
     eventSource.addEventListener("init", (e) => {
       const data = JSON.parse(e.data);
@@ -271,6 +292,7 @@ function App() {
         console.error("Failed to parse done risks", err);
       }
       eventSource.close();
+      eventSourceRef.current = null;
     });
 
     eventSource.addEventListener("error", (e) => {
@@ -283,12 +305,14 @@ function App() {
       }
       setIsAnalyzing(false);
       eventSource.close();
+      eventSourceRef.current = null;
     });
     
     eventSource.onerror = () => {
       console.error("SSE Error");
       setIsAnalyzing(false);
       eventSource.close();
+      eventSourceRef.current = null;
     };
   };
 
@@ -390,9 +414,35 @@ function App() {
           </a>
           
           {file && (
-            <button className="btn-primary" onClick={startAnalysis} disabled={isAnalyzing}>
-              {isAnalyzing ? `Analyzing... ${progress.current}/${progress.total}` : 'Run Analysis'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {isAnalyzing ? (
+                <>
+                  <button className="btn-primary" disabled style={{ opacity: 0.7 }}>
+                    Analyzing... {progress.current}/{progress.total}
+                  </button>
+                  <button 
+                    onClick={stopAnalysis}
+                    style={{ 
+                      backgroundColor: 'var(--apple-red)', 
+                      color: 'white', 
+                      border: 'none', 
+                      borderRadius: '20px', 
+                      padding: '8px 16px', 
+                      fontWeight: 600, 
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      boxShadow: '0 2px 8px rgba(255, 69, 58, 0.3)'
+                    }}
+                  >
+                    Stop
+                  </button>
+                </>
+              ) : (
+                <button className="btn-primary" onClick={startAnalysis}>
+                  Run Analysis
+                </button>
+              )}
+            </div>
           )}
         </div>
       </header>
@@ -405,11 +455,11 @@ function App() {
             <div className="upload-zone" onClick={() => document.getElementById('file-upload')?.click()}>
               <Upload size={48} color="var(--text-secondary)" style={{ marginBottom: '16px' }} />
               <h2>Upload Manuscript</h2>
-              <p className="text-secondary" style={{ marginTop: '8px' }}>Drag & drop your .docx or .txt file here</p>
+              <p className="text-secondary" style={{ marginTop: '8px' }}>Drag & drop your .docx, .pdf or .txt file here</p>
               <input 
                 id="file-upload" 
                 type="file" 
-                accept=".docx,.txt" 
+                accept=".docx,.pdf,.txt" 
                 style={{ display: 'none' }} 
                 onChange={handleFileUpload}
               />
@@ -659,10 +709,15 @@ function App() {
                 className="glass-card slide-in" 
                 onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
               >
-                <div className="card-header">
-                  <AlertCircle size={16} color="var(--apple-red)" />
-                  <span style={{ color: 'var(--apple-red)' }}>AI Trigger Detected</span>
-                </div>
+                {(() => {
+                  const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange)" };
+                  return (
+                    <div className="card-header" style={{ color: issueInfo.color }}>
+                      <AlertCircle size={16} color={issueInfo.color} />
+                      <span>{issueInfo.title}</span>
+                    </div>
+                  );
+                })()}
                 
                 <p style={{ fontSize: '15px', color: 'var(--text-primary)', marginBottom: '12px' }}>
                   "{diag.text.substring(0, 80)}..."

@@ -96,11 +96,24 @@ def parse_docx(file_bytes):
     doc = docx.Document(io.BytesIO(file_bytes))
     return "\n".join([p.text for p in doc.paragraphs])
 
+def parse_pdf_bytes(file_bytes):
+    import io
+    from pypdf import PdfReader
+    reader = PdfReader(io.BytesIO(file_bytes))
+    text = ""
+    for page in reader.pages:
+        t = page.extract_text()
+        if t:
+            text += t + "\n"
+    return text
+
 @app.post("/api/upload")
 async def upload_document(file: UploadFile = File(...)):
     contents = await file.read()
-    if file.filename.endswith(".docx"):
+    if file.filename.lower().endswith(".docx"):
         text = parse_docx(contents)
+    elif file.filename.lower().endswith(".pdf"):
+        text = parse_pdf_bytes(contents)
     else:
         text = contents.decode("utf-8")
         
@@ -216,13 +229,18 @@ async def diagnose_stream(session_id: str):
             engine_inst = None
             judge_inst = None
             
+            # 无论本地还是云端，只要本地模型存在，就加载作为 PPL 计算引擎
+            if os.path.exists(MODEL_PATH):
+                global engine
+                if engine is None:
+                    engine = PPLEngine(MODEL_PATH)
+                engine_inst = engine
+                
             if engine_type == "local":
-                if os.path.exists(MODEL_PATH):
-                    global engine, judge
-                    if engine is None:
-                        engine = PPLEngine(MODEL_PATH)
-                        judge = StyleJudge(engine.llm)
-                    engine_inst = engine
+                if engine_inst:
+                    global judge
+                    if judge is None:
+                        judge = StyleJudge(engine_inst.llm)
                     judge_inst = judge
                 else:
                     yield {
@@ -475,11 +493,19 @@ async def diagnose_stream(session_id: str):
                         ctx_before = sentences[max(0, idx-2):idx]
                         ctx_after = sentences[idx+1:min(len(sentences), idx+3)]
                         
+                        ppl_val = None
+                        if engine_inst:
+                            async with model_lock:
+                                ppl_val, _ = await asyncio.to_thread(
+                                    engine_inst.evaluate_sentence_ppl, text_str, 0, 0.0, float('inf')
+                                )
+                                ppl_val = round(ppl_val, 2) if ppl_val else None
+
                         diag = await asyncio.to_thread(
                             judge_inst.diagnose_sentence, 
                             text_str, 
                             stats=diag_rules, 
-                            ppl=None, 
+                            ppl=ppl_val,
                             context_before=ctx_before, 
                             context_after=ctx_after,
                             skill_rules=active_rules,
@@ -488,9 +514,7 @@ async def diagnose_stream(session_id: str):
                             base_url=base_url
                         )
                         res_dict["think"] = diag.get("think", "")
-                        
-                        if diag.get("estimated_perplexity") is not None:
-                            res_dict["ppl"] = diag["estimated_perplexity"]
+                        res_dict["ppl"] = ppl_val
                             
                         issues = diag.get("issues", [])
                         if issues:
@@ -543,8 +567,8 @@ async def diagnose_stream(session_id: str):
                     result["redundancy_risk"] = running_red
                     
                     yield {"event": "result", "data": json.dumps(result)}
-                    # 0.15s sleep between serial requests to avoid API rate limiting/timeouts
-                    await asyncio.sleep(0.15)
+                    # 0.01s sleep to yield control back to the event loop and optimize throughput
+                    await asyncio.sleep(0.01)
             
             # Final document-level risks
             pred_risk, unif_risk = calculate_style_risks(
