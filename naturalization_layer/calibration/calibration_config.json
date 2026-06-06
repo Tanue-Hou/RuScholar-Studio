@@ -1,0 +1,38 @@
+{
+  "SCI_TECH": {
+    "ppl_low": 12.0,
+    "ppl_high": 90.0,
+    "nv_ratio_max": 4.5,
+    "passive_max": 3
+  },
+  "AUTOMATION_CONTROL": {
+    "ppl_low": 10.0,
+    "ppl_high": 85.0,
+    "nv_ratio_max": 5.0,
+    "passive_max": 4
+  },
+  "AGRI_MED": {
+    "ppl_low": 15.0,
+    "ppl_high": 80.0,
+    "nv_ratio_max": 4.0,
+    "passive_max": 2
+  },
+  "HUM_POL_ECON": {
+    "ppl_low": 18.0,
+    "ppl_high": 75.0,
+    "nv_ratio_max": 3.0,
+    "passive_max": 1
+  },
+  "ARTS_SPORTS": {
+    "ppl_low": 20.0,
+    "ppl_high": 75.0,
+    "nv_ratio_max": 2.5,
+    "passive_max": 1
+  },
+  "UNIVERSAL": {
+    "ppl_low": 15.0,
+    "ppl_high": 80.0,
+    "nv_ratio_max": 4.0,
+    "passive_max": 2
+  }
+}

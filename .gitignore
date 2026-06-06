@@ -28,3 +28,8 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Scratch files and temporary test scripts
+scratch/
+frontend/rewrite_app.py
+

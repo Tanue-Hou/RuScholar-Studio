@@ -194,6 +194,7 @@ def analyze_text_rules(text: str) -> dict:
         sentence_diagnostics.append({
             "original_text": sent_text_restored,
             "word_count": words_count,
+            "verbs_count": verbs_count,
             "nv_ratio": round(nv_ratio, 2),
             "passive_count": passive_count,
             "genitive_chains": list(set(genitive_chains)),

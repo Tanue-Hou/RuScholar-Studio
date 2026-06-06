@@ -3,10 +3,12 @@ import sys
 import json
 import asyncio
 import math
+import uuid
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from contextlib import asynccontextmanager
+from pydantic import BaseModel
 
 # Add parent dir to path to import naturalization_layer
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,18 +16,24 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from naturalization_layer.rules_engine import analyze_text_rules, should_run_ppl_heuristic
 from naturalization_layer.ppl_engine import PPLEngine
 from naturalization_layer.llm_judge import StyleJudge
+from naturalization_layer.style_risk import calculate_style_risks
+from naturalization_layer.translationese_risk import calculate_translationese_risk, run_translationese_checks
+from naturalization_layer.source_similarity import check_source_similarity
+from naturalization_layer.citation_integrity import check_citation_integrity
 import docx
 
 MODEL_PATH = "../models/Qwen3-4B-Q5_K_M.gguf"
 engine = None
 judge = None
 SKILL_RULES_PATH = os.path.expanduser("~/.gemini/config/skills/phd-thesis-butler/assets/references/polishing_rules_v5.json")
+CALIBRATION_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "naturalization_layer/calibration/calibration_config.json")
 global_clusters = {}
+calibration_db = {}
 model_lock = asyncio.Lock()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global engine, judge, global_clusters
+    global engine, judge, global_clusters, calibration_db
     print("Loading Llama model...")
     if os.path.exists(MODEL_PATH):
         engine = PPLEngine(MODEL_PATH)
@@ -42,6 +50,14 @@ async def lifespan(app: FastAPI):
                 print("Loaded phd-thesis-butler polishing rules clusters.")
         except Exception as e:
             print(f"Failed to load skill rules: {e}")
+            
+    if os.path.exists(CALIBRATION_CONFIG_PATH):
+        try:
+            with open(CALIBRATION_CONFIG_PATH, 'r', encoding='utf-8') as f:
+                calibration_db = json.load(f)
+                print("Loaded calibration thresholds database.")
+        except Exception as e:
+            print(f"Failed to load calibration config: {e}")
             
     yield
     print("Shutting down...")
@@ -90,13 +106,14 @@ async def upload_document(file: UploadFile = File(...)):
         
     return {"status": "ok", "filename": file.filename, "text": text}
 
-@app.get("/api/detect_discipline")
-async def detect_discipline_endpoint(
-    text: str,
-    engine_type: str = "local",
-    api_key: str = "",
+class DetectDisciplineRequest(BaseModel):
+    text: str
+    engine_type: str = "local"
+    api_key: str = ""
     base_url: str = ""
-):
+
+@app.post("/api/detect_discipline")
+async def detect_discipline_endpoint(req: DetectDisciplineRequest):
     """
     Zero-shot academic discipline classification endpoint.
     Samples the first 1000 characters and identifies the academic domain cluster.
@@ -104,7 +121,7 @@ async def detect_discipline_endpoint(
     global engine, judge
     judge_inst = None
     
-    if engine_type == "local":
+    if req.engine_type == "local":
         model_path = "../models/Qwen3-4B-Q5_K_M.gguf"
         if os.path.exists(model_path):
             if engine is None:
@@ -116,7 +133,7 @@ async def detect_discipline_endpoint(
         
     if judge_inst is None:
         # Fallback to simple keyword detection if local model file is missing
-        text_lower = text.lower()
+        text_lower = req.text.lower()
         if any(w in text_lower for w in ["управление", "робот", "автоматиз", "регулятор", "динамик", "control", "robot", "automat"]):
             discipline = "AUTOMATION_CONTROL"
         elif any(w in text_lower for w in ["биолог", "медиц", "клетк", "терап", "ген", "biolog", "medic", "cell", "gene"]):
@@ -129,14 +146,14 @@ async def detect_discipline_endpoint(
             discipline = "UNIVERSAL"
     else:
         try:
-            if engine_type == "local":
+            if req.engine_type == "local":
                 async with model_lock:
                     discipline = await asyncio.to_thread(
-                        judge_inst.detect_discipline, text, engine_type, api_key, base_url
+                        judge_inst.detect_discipline, req.text, req.engine_type, req.api_key, req.base_url
                     )
             else:
                 discipline = await asyncio.to_thread(
-                    judge_inst.detect_discipline, text, engine_type, api_key, base_url
+                    judge_inst.detect_discipline, req.text, req.engine_type, req.api_key, req.base_url
                 )
         except Exception as e:
             print(f"Discipline detection failed: {e}. Falling back to UNIVERSAL.")
@@ -144,23 +161,57 @@ async def detect_discipline_endpoint(
             
     return {"discipline": discipline}
 
-@app.get("/api/diagnose")
-async def diagnose_stream(
-    text: str,
-    engine_type: str = "local",
-    api_key: str = "",
-    base_url: str = "",
+class SessionRequest(BaseModel):
+    text: str
+    engine_type: str = "local"
+    api_key: str = ""
+    base_url: str = ""
     discipline: str = "UNIVERSAL"
-):
+
+active_sessions = {}
+
+@app.post("/api/session")
+async def create_session(req: SessionRequest):
+    session_id = str(uuid.uuid4())
+    active_sessions[session_id] = {
+        "text": req.text,
+        "engine_type": req.engine_type,
+        "api_key": req.api_key,
+        "base_url": req.base_url,
+        "discipline": req.discipline
+    }
+    return {"session_id": session_id}
+
+@app.get("/api/diagnose")
+async def diagnose_stream(session_id: str):
     """
     Server-Sent Events endpoint to stream the analysis of sentences.
-    Accepts raw text (URL encoded) and configuration parameters.
+    Retrieves execution parameters from in-memory session store using session_id.
     """
+    session = active_sessions.get(session_id)
+    if not session:
+        async def error_generator():
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": "Session expired or not found."})
+            }
+        return EventSourceResponse(error_generator())
+        
+    text = session["text"]
+    engine_type = session["engine_type"]
+    api_key = session["api_key"]
+    base_url = session["base_url"]
+    discipline = session["discipline"]
+    
     async def event_generator():
         try:
-            # 1. Run Rules Engine on the whole text (faster and context-aware)
+            # 1. Run Rules Engine on the whole text
             rules_res = analyze_text_rules(text)
             sentences = rules_res["sentences"]
+            
+            # 2. Run Citation Integrity check on the whole text
+            integrity_report = check_citation_integrity(text)
+            global_warnings = integrity_report.get("warnings", [])
             
             # Engine initialization (lazy loading)
             engine_inst = None
@@ -182,17 +233,44 @@ async def diagnose_stream(
                     }
                     return
             else:
-                # For DeepSeek API, instantiate StyleJudge with None LLM
                 judge_inst = StyleJudge(None)
             
             # Load dynamic rules for the specified discipline
             active_rules = get_discipline_rules(discipline)
+            
+            # Load calibrated thresholds
+            calib = calibration_db.get(discipline, calibration_db.get("UNIVERSAL", {}))
+            ppl_low = calib.get("ppl_low", 15.0)
+            ppl_high = calib.get("ppl_high", 80.0)
+            nv_ratio_max = calib.get("nv_ratio_max", 4.5)
             
             # Yield init event matching frontend expectations
             yield {
                 "event": "init",
                 "data": json.dumps({"total_sentences": len(sentences), "discipline": discipline})
             }
+            
+            # Yield citation integrity warnings first as global diagnostics (with index = -1, -2...)
+            for w_idx, warning in enumerate(global_warnings):
+                yield {
+                    "event": "result",
+                    "data": json.dumps({
+                        "index": -1 - w_idx,
+                        "text": f"Citation Integrity Alert ({warning['evidence']})",
+                        "ppl": None,
+                        "issue_type": warning["issue_type"],
+                        "severity": warning["severity"],
+                        "explanation": warning["explanation_zh"],
+                        "suggestion": warning["rewrite_suggestion"],
+                        "think": None,
+                        "status": "flagged",
+                        "metrics": None,
+                        "predictability_risk": 0.0,
+                        "uniformity_risk": 0.0,
+                        "translationese_risk": 0.0,
+                        "redundancy_risk": 0.0
+                    })
+                }
             
             # Track values for document-level Style Risk Indices
             ppl_vals = []
@@ -204,6 +282,10 @@ async def diagnose_stream(
             
             for i, s in enumerate(sentences):
                 diag_rules = rules_res["sentence_diagnostics"][i]
+                
+                # Check semantic similarity against source database
+                has_citation = "[" in s
+                sim_warning = check_source_similarity(s, has_citation)
                 
                 result = {
                     "index": i,
@@ -226,28 +308,46 @@ async def diagnose_stream(
                 has_track_a_triggers = (
                     len(diag_rules.get("cliches_found", [])) > 0 or
                     len(diag_rules.get("genitive_chains", [])) > 0 or
-                    diag_rules.get("nv_ratio", 0.0) > 4.0 or
+                    diag_rules.get("nv_ratio", 0.0) > nv_ratio_max or
                     diag_rules.get("passive_count", 0) > 0
                 )
                 
                 if engine_type == "local" and engine_inst:
                     ee_tokens = 6 if not has_track_a_triggers else 0
-                    ee_lower = 15.0 if not has_track_a_triggers else 0.0
-                    ee_upper = 80.0 if not has_track_a_triggers else float('inf')
+                    ee_lower = ppl_low if not has_track_a_triggers else 0.0
+                    ee_upper = ppl_high if not has_track_a_triggers else float('inf')
                     
                     async with model_lock:
                         ppl, was_early_exited = await asyncio.to_thread(
                             engine_inst.evaluate_sentence_ppl, s, ee_tokens, ee_lower, ee_upper
-                        )
-                    
+                           )
+                       
                     result["ppl"] = round(ppl, 2) if ppl else None
-                    is_suspicious = ppl < 15.0 or ppl > 80.0 or has_track_a_triggers
+                    is_suspicious = ppl < ppl_low or ppl > ppl_high or has_track_a_triggers
                 else:
                     was_early_exited = False
                     is_suspicious = has_track_a_triggers
                 
+                # Run advanced translationese checks
+                trans_warnings = run_translationese_checks(s, diag_rules)
+                
                 if was_early_exited:
                     result["status"] = "early_exit"
+                elif sim_warning:
+                    # High priority citation/source alignment warnings
+                    result["status"] = "flagged"
+                    result["issue_type"] = sim_warning["issue_type"]
+                    result["severity"] = sim_warning["severity"]
+                    result["explanation"] = sim_warning["explanation_zh"]
+                    result["suggestion"] = sim_warning["rewrite_suggestion"]
+                elif trans_warnings:
+                    # Custom linguistic heuristics warnings
+                    warning = trans_warnings[0]
+                    result["status"] = "flagged"
+                    result["issue_type"] = warning["issue_type"]
+                    result["severity"] = warning["severity"]
+                    result["explanation"] = warning["explanation_zh"]
+                    result["suggestion"] = warning["rewrite_suggestion"]
                 elif is_suspicious:
                     ctx_before = sentences[max(0, i-2):i]
                     ctx_after = sentences[i+1:min(len(sentences), i+3)]
@@ -304,52 +404,33 @@ async def diagnose_stream(
                 if result["status"] == "flagged":
                     flagged_count += 1
                     
+                # Calculate running risks for real-time telemetry (consolidated backend calculation)
+                running_pred, running_unif = calculate_style_risks(ppl_vals, flagged_count, i + 1, calib)
+                running_trans = calculate_translationese_risk(nv_ratios, passive_counts, genitive_chain_counts)
+                cliche_sent_count = sum(1 for c in cliche_counts if c > 0)
+                running_red = round((cliche_sent_count / (i + 1)) * 100, 1)
+                
+                result["predictability_risk"] = running_pred
+                result["uniformity_risk"] = running_unif
+                result["translationese_risk"] = running_trans
+                result["redundancy_risk"] = running_red
+                
                 yield {"event": "result", "data": json.dumps(result)}
                 # Brief pause to allow event loop to breathe
                 await asyncio.sleep(0.01)
             
-            # Calculate final document-level risks
-            ppl_evaluated = [p for p in ppl_vals if p is not None]
-            
-            # 1. Predictability Risk
-            if ppl_evaluated:
-                pred_count = sum(1 for p in ppl_evaluated if p < 15.0)
-                predictability_risk = round((pred_count / len(ppl_evaluated)) * 100, 1)
-            else:
-                predictability_risk = round((flagged_count / max(1, len(sentences))) * 100, 1)
-                
-            # 2. Uniformity Risk
-            if len(ppl_evaluated) > 1:
-                mean_ppl = sum(ppl_evaluated) / len(ppl_evaluated)
-                variance = sum((p - mean_ppl) ** 2 for p in ppl_evaluated) / len(ppl_evaluated)
-                std_dev = math.sqrt(variance)
-                uniformity_risk = round(max(0.0, min(100.0, (30.0 - std_dev) * 4.0)), 1)
-            else:
-                uniformity_risk = 0.0
-                
-            # 3. Translationese Risk
-            trans_scores = []
-            for nv, pas, gen in zip(nv_ratios, passive_counts, genitive_chain_counts):
-                nv_score = min(2.0, max(0.0, nv - 1.5)) / 2.0
-                pas_score = min(1.0, pas * 0.5)
-                gen_score = min(1.0, gen * 0.5)
-                trans_scores.append((nv_score + pas_score + gen_score) / 3.0)
-            
-            translationese_risk = round((sum(trans_scores) / max(1, len(trans_scores))) * 100, 1)
-            
-            # 4. Redundancy Risk
-            if cliche_counts:
-                cliche_sent_count = sum(1 for c in cliche_counts if c > 0)
-                redundancy_risk = round((cliche_sent_count / len(cliche_counts)) * 100, 1)
-            else:
-                redundancy_risk = 0.0
+            # Final document-level risks
+            pred_risk, unif_risk = calculate_style_risks(ppl_vals, flagged_count, len(sentences), calib)
+            trans_risk = calculate_translationese_risk(nv_ratios, passive_counts, genitive_chain_counts)
+            cliche_sent_count = sum(1 for c in cliche_counts if c > 0)
+            redundancy_risk = round((cliche_sent_count / max(1, len(sentences))) * 100, 1)
             
             yield {
                 "event": "done",
                 "data": json.dumps({
-                    "predictability_risk": predictability_risk,
-                    "uniformity_risk": uniformity_risk,
-                    "translationese_risk": translationese_risk,
+                    "predictability_risk": pred_risk,
+                    "uniformity_risk": unif_risk,
+                    "translationese_risk": trans_risk,
                     "redundancy_risk": redundancy_risk
                 })
             }
@@ -361,6 +442,8 @@ async def diagnose_stream(
                 "event": "error",
                 "data": json.dumps({"error": str(e)})
             }
+        finally:
+            active_sessions.pop(session_id, None)
         
     return EventSourceResponse(event_generator())
 

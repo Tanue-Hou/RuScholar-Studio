@@ -19,6 +19,24 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+body.light-theme {
+  --bg-color: #F2F2F7;
+  --text-primary: #1C1C1E;
+  --text-secondary: #8E8E93;
+  --text-tertiary: #C7C7CC;
+  
+  --glass-bg: rgba(0, 0, 0, 0.04);
+  --glass-border: rgba(0, 0, 0, 0.08);
+  
+  --apple-red: #FF3B30;
+  --apple-red-bg: rgba(255, 59, 48, 0.1);
+  --apple-orange: #FF9500;
+  --apple-green: #34C759;
+  --apple-blue: #007AFF;
+  --apple-purple: #AF52DE;
+  --apple-pink: #FF2D55;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

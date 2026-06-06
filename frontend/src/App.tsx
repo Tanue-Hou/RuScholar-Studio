@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, AlertCircle, LayoutDashboard } from 'lucide-react';
+import { Upload, FileText, AlertCircle, LayoutDashboard, Sun, Moon } from 'lucide-react';
 import './index.css';
 
 interface DiagnosticResult {
@@ -12,6 +12,28 @@ interface DiagnosticResult {
   suggestion: string | null;
   think: string | null;
   status: 'ok' | 'skipped_heuristic' | 'early_exit' | 'passed' | 'flagged';
+  metrics?: {
+    nv_ratio: number;
+    passive_count: number;
+    genitive_chains_count: number;
+    cliches_count: number;
+  } | null;
+  predictability_risk?: number;
+  uniformity_risk?: number;
+  translationese_risk?: number;
+  redundancy_risk?: number;
+}
+
+interface SentenceItem {
+  text: string;
+  status: string;
+  ppl?: number | null;
+  metrics?: {
+    nv_ratio: number;
+    passive_count: number;
+    genitive_chains_count: number;
+    cliches_count: number;
+  } | null;
 }
 
 const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string }> = {
@@ -26,7 +48,7 @@ const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string }> 
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [documentText, setDocumentText] = useState<string>('');
-  const [sentences, setSentences] = useState<{ text: string, status: string, ppl?: number | null, metrics?: any }[]>([]);
+  const [sentences, setSentences] = useState<SentenceItem[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -40,90 +62,27 @@ function App() {
   const [stats, setStats] = useState({ flaggedCount: 0, totalPPL: 0, pplCount: 0 });
   
   const [discipline, setDiscipline] = useState<string>('UNIVERSAL');
-  const [finalRisks, setFinalRisks] = useState<{
-    predictability: number | null,
-    uniformity: number | null,
-    translationese: number | null,
-    redundancy: number | null
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  
+  const [runningRisks, setRunningRisks] = useState<{
+    predictability: number;
+    uniformity: number;
+    translationese: number;
+    redundancy: number;
   }>({
-    predictability: null,
-    uniformity: null,
-    translationese: null,
-    redundancy: null
+    predictability: 0,
+    uniformity: 0,
+    translationese: 0,
+    redundancy: 0
   });
 
-  const getRealTimeRisks = () => {
-    // Filter sentences that have been analyzed (status !== 'analyzing')
-    const analyzed = sentences.filter(s => s && s.status !== 'analyzing' && s.status !== 'skipped_heuristic');
-    if (analyzed.length === 0) {
-      return {
-        predictability: 0,
-        uniformity: 0,
-        translationese: 0,
-        redundancy: 0
-      };
-    }
-
-    const pplVals = analyzed.map(s => s.ppl).filter((p): p is number => p !== undefined && p !== null);
-    
-    // 1. Predictability Risk
-    let predictability = 0;
-    if (pplVals.length > 0) {
-      const predCount = pplVals.filter(p => p < 15.0).length;
-      predictability = Math.round((predCount / pplVals.length) * 100);
+  useEffect(() => {
+    if (theme === 'light') {
+      document.body.classList.add('light-theme');
     } else {
-      const flagged = analyzed.filter(s => s.status === 'flagged').length;
-      predictability = Math.round((flagged / analyzed.length) * 100);
+      document.body.classList.remove('light-theme');
     }
-
-    // 2. Uniformity Risk
-    let uniformity = 0;
-    if (pplVals.length > 1) {
-      const meanPpl = pplVals.reduce((a, b) => a + b, 0) / pplVals.length;
-      const variance = pplVals.reduce((acc, p) => acc + Math.pow(p - meanPpl, 2), 0) / pplVals.length;
-      const stdDev = Math.sqrt(variance);
-      uniformity = Math.round(Math.max(0, Math.min(100, (30.0 - stdDev) * 4.0)));
-    }
-
-    // 3. Translationese Risk
-    let translationese = 0;
-    const transScores: number[] = [];
-    analyzed.forEach(s => {
-      if (s.metrics) {
-        const nv = s.metrics.nv_ratio || 0;
-        const pas = s.metrics.passive_count || 0;
-        const gen = s.metrics.genitive_chains_count || 0;
-        
-        const nvScore = Math.min(2.0, Math.max(0.0, nv - 1.5)) / 2.0;
-        const pasScore = Math.min(1.0, pas * 0.5);
-        const genScore = Math.min(1.0, gen * 0.5);
-        
-        transScores.push((nvScore + pasScore + genScore) / 3.0);
-      }
-    });
-    if (transScores.length > 0) {
-      translationese = Math.round((transScores.reduce((a, b) => a + b, 0) / transScores.length) * 100);
-    }
-
-    // 4. Redundancy Risk
-    let redundancy = 0;
-    const clicheSentences = analyzed.filter(s => s.metrics && s.metrics.cliches_count > 0).length;
-    redundancy = Math.round((clicheSentences / analyzed.length) * 100);
-
-    return {
-      predictability,
-      uniformity,
-      translationese,
-      redundancy
-    };
-  };
-
-  const runningRisks = isAnalyzing ? getRealTimeRisks() : {
-    predictability: finalRisks.predictability !== null ? finalRisks.predictability : 0,
-    uniformity: finalRisks.uniformity !== null ? finalRisks.uniformity : 0,
-    translationese: finalRisks.translationese !== null ? finalRisks.translationese : 0,
-    redundancy: finalRisks.redundancy !== null ? finalRisks.redundancy : 0
-  };
+  }, [theme]);
 
   useEffect(() => {
     fetch('/api/check_model')
@@ -191,17 +150,20 @@ function App() {
     setDiagnostics([]);
     setSentences([]);
     setStats({ flaggedCount: 0, totalPPL: 0, pplCount: 0 });
-    setFinalRisks({ predictability: null, uniformity: null, translationese: null, redundancy: null });
+    setRunningRisks({ predictability: 0, uniformity: 0, translationese: 0, redundancy: 0 });
     
     let detectedDiscipline = 'UNIVERSAL';
     try {
-      const detectParams = new URLSearchParams({
-        text: documentText.substring(0, 1000),
-        engine_type: engineType,
-        api_key: apiKey,
-        base_url: baseUrl
+      const detectRes = await fetch("/api/detect_discipline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: documentText.substring(0, 1000),
+          engine_type: engineType,
+          api_key: apiKey,
+          base_url: baseUrl
+        })
       });
-      const detectRes = await fetch(`/api/detect_discipline?${detectParams.toString()}`);
       const detectData = await detectRes.json();
       detectedDiscipline = detectData.discipline || 'UNIVERSAL';
       setDiscipline(detectedDiscipline);
@@ -210,15 +172,31 @@ function App() {
       setDiscipline('UNIVERSAL');
     }
 
-    // Connect to SSE
-    const params = new URLSearchParams({
-      text: documentText,
-      engine_type: engineType,
-      api_key: apiKey,
-      base_url: baseUrl,
-      discipline: detectedDiscipline
-    });
-    const eventSource = new EventSource(`/api/diagnose?${params.toString()}`);
+    // Register session via POST to protect sensitive details and api keys
+    let sessionId: string;
+    try {
+      const sessionRes = await fetch("/api/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: documentText,
+          engine_type: engineType,
+          api_key: apiKey,
+          base_url: baseUrl,
+          discipline: detectedDiscipline
+        })
+      });
+      const sessionData = await sessionRes.json();
+      sessionId = sessionData.session_id;
+    } catch (err) {
+      console.error("Failed to register analysis session", err);
+      alert("Failed to initialize secure session.");
+      setIsAnalyzing(false);
+      return;
+    }
+
+    // Connect to SSE using session_id
+    const eventSource = new EventSource(`/api/diagnose?session_id=${sessionId}`);
     
     eventSource.addEventListener("init", (e) => {
       const data = JSON.parse(e.data);
@@ -232,12 +210,14 @@ function App() {
       
       setSentences(prev => {
         const next = [...prev];
-        next[data.index] = { 
-          text: data.text, 
-          status: data.status,
-          ppl: data.ppl,
-          metrics: (data as any).metrics
-        };
+        if (data.index >= 0) {
+          next[data.index] = { 
+            text: data.text, 
+            status: data.status,
+            ppl: data.ppl,
+            metrics: data.metrics
+          };
+        }
         return next;
       });
       
@@ -259,18 +239,28 @@ function App() {
         setDiagnostics(prev => [...prev, data]);
       }
       
-      setProgress(prev => ({ ...prev, current: prev.current + 1 }));
+      // Update running style risks calculated strictly on the backend
+      setRunningRisks({
+        predictability: Math.round(data.predictability_risk || 0),
+        uniformity: Math.round(data.uniformity_risk || 0),
+        translationese: Math.round(data.translationese_risk || 0),
+        redundancy: Math.round(data.redundancy_risk || 0)
+      });
+      
+      if (data.index >= 0) {
+        setProgress(prev => ({ ...prev, current: prev.current + 1 }));
+      }
     });
     
     eventSource.addEventListener("done", (e) => {
       setIsAnalyzing(false);
       try {
         const doneData = JSON.parse(e.data);
-        setFinalRisks({
-          predictability: doneData.predictability_risk,
-          uniformity: doneData.uniformity_risk,
-          translationese: doneData.translationese_risk,
-          redundancy: doneData.redundancy_risk
+        setRunningRisks({
+          predictability: Math.round(doneData.predictability_risk || 0),
+          uniformity: Math.round(doneData.uniformity_risk || 0),
+          translationese: Math.round(doneData.translationese_risk || 0),
+          redundancy: Math.round(doneData.redundancy_risk || 0)
         });
       } catch (err) {
         console.error("Failed to parse done risks", err);
@@ -278,11 +268,12 @@ function App() {
       eventSource.close();
     });
 
-    eventSource.addEventListener("error", (e: any) => {
+    eventSource.addEventListener("error", (e) => {
+      const errEvent = e as MessageEvent;
       try {
-        const data = JSON.parse(e.data);
+        const data = JSON.parse(errEvent.data);
         alert("Analysis Error: " + (data.error || data.message || "Unknown error"));
-      } catch (err) {
+      } catch {
         alert("Analysis Error occurred.");
       }
       setIsAnalyzing(false);
@@ -297,9 +288,8 @@ function App() {
   };
 
   const scrollToSentence = (index: number) => {
-    if (sentenceRefs.current[index]) {
+    if (index >= 0 && sentenceRefs.current[index]) {
       sentenceRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Temporary highlight effect could be added here
     }
   };
 
@@ -367,6 +357,23 @@ function App() {
           {engineType === 'local' && localModelStatus === 'downloading' && (
             <div style={{ color: 'var(--apple-blue)', fontSize: '13px' }}>{Math.round(downloadProgress)}%</div>
           )}
+          
+          <button 
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            style={{ 
+              backgroundColor: 'transparent', 
+              color: 'var(--text-secondary)', 
+              border: 'none', 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '6px'
+            }}
+            title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
           <a 
             href="https://github.com/Tanue-Hou/phd-thesis-butler" 
             target="_blank" 
@@ -414,7 +421,23 @@ function App() {
                     className={`sentence ${s.status}`}
                     title={s.status}
                   >
-                    {s.text}{' '}
+                    {s.text}
+                    {s.ppl !== undefined && s.ppl !== null && (
+                      <sub 
+                        className="ppl-tag font-mono" 
+                        style={{ 
+                          color: s.ppl < 15 ? 'var(--apple-red)' : s.ppl < 25 ? 'var(--apple-orange)' : 'var(--text-secondary)',
+                          marginLeft: '4px',
+                          fontSize: '10px',
+                          verticalAlign: 'sub',
+                          opacity: 0.8,
+                          userSelect: 'none'
+                        }}
+                      >
+                        {s.ppl}
+                      </sub>
+                    )}
+                    {' '}
                   </span>
                 ))
               )}
