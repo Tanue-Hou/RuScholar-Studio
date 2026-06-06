@@ -93,7 +93,7 @@ You must return a JSON object containing exactly one key "discipline" with the c
 3. Обязательно укажи конкретную фразу-доказательство (evidence) и объясни причину на русском (explanation_ru) и китайском (explanation_zh) языках. В объяснении обязательно явно сошлись на соответствующее правило (или нарушение правила) из предоставленной базы ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ (PhD Thesis Butler) или лингвистический критерий (например, отношение существительных к глаголам, пассивный залог), если оно применимо к данной ошибке.
 4. Предложи зрелый академический вариант переписывания (rewrite_suggestion). При переписывании обязательно опирайся на ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ, лингвистические предупреждения и Контекст!
 6. В ключе "estimated_perplexity" обязательно укажи численную оценку perplexity предложения (дробное число от 5.0 до 150.0): от 10.0 до 15.0 для гладкого/шаблонного/подозреваемого в ИИ-генерации текста; от 30.0 до 50.0 для естественного академического текста человека; более 80.0 для тяжелого/перегруженного перевода.
-7. ВНИМАНИЕ: Если ты работаешь в локальном режиме, НЕ используй теги <think> и не выводи свои размышления — сразу выводи JSON, начиная с символа '{{'. Если ты работаешь в облачном режиме с поддержкой reasoning (например, DeepSeek), ограничь свои размышления в теге <think> объемом до 100 слов.
+7. ВНИМАНИЕ: ОБЯЗАТЕЛЬНО пиши все свои размышления внутри тега <think> (если ты используешь или поддерживаешь его) исключительно на китайском языке (中文/zh-CN). Ни в коем случае не пиши размышления на русском или английском языках. Ограничь объем размышлений до 100-150 иероглифов, после чего сразу переходи к заполнению JSON.
 
 Ответь СТРОГО в формате JSON:
 {{
@@ -112,13 +112,38 @@ You must return a JSON object containing exactly one key "discipline" with the c
 }}"""
 
         # Dispatch to appropriate engine
-        if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash"):
-            raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, context_str)
-        else:
-            # Fallback to local
-            prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: DO NOT use <think> tags. Do not output any reasoning text. Start your response directly with '{{' and output ONLY the raw JSON.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
-            response = self.llm(prompt, max_tokens=1536, stop=["<|im_end|>"])
-            raw_text = response["choices"][0]["text"].strip()
+        try:
+            if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash"):
+                raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, context_str)
+            else:
+                # Fallback to local
+                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN), keeping it extremely concise (under 80 characters). Then output the JSON object. Do not write reasoning in Russian.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
+                response = self.llm(prompt, max_tokens=1536, stop=["<|im_end|>"])
+                raw_text = response["choices"][0]["text"].strip()
+        except Exception as api_err:
+            if engine_type == "local":
+                explanation_zh = f"由于本地模型推理异常（详情: {str(api_err)}），未能成功获取该句的学术写作风格透视。请稍后再试或切换到云端模型。"
+                explanation_ru = f"Ошибка локальной модели ({str(api_err)}). Не удалось выполнить диагностику."
+                think_msg = "【本地模型推理异常】由于本地 Llama 引擎运行出错或内存不足，未能完成句子的深度诊断。建议检查后台服务、重新加载模型，或尝试使用云端接口。"
+            else:
+                explanation_zh = f"由于云端服务连接异常或超频限制（详情: {str(api_err)}），未能成功获取该句的学术写作风格透视。请稍后再试或切换到本地模型。"
+                explanation_ru = f"Ошибка подключения к API или превышение лимитов ({str(api_err)}). Не удалось выполнить диагностику."
+                think_msg = "【云端 API 响应异常】由于网络连接超时、API 服务暂时受限或请求频率过高，无法获取大模型的实时推理过程。建议检查网络连接、API 密钥可用性，或在本地模式下运行。"
+                
+            return {
+                "issues": [{
+                    "issue_type": "api_request_error",
+                    "severity": "high",
+                    "evidence": "API Connection Failed",
+                    "explanation_zh": explanation_zh,
+                    "explanation_ru": explanation_ru,
+                    "rewrite_suggestion": "-"
+                }],
+                "think": think_msg,
+                "error": f"API request failed: {str(api_err)}",
+                "raw": f"API Error: {str(api_err)}",
+                "safe_to_rewrite": False
+            }
         
         think_content, cleaned_text = self._clean_json_text(raw_text)
         
@@ -133,18 +158,19 @@ You must return a JSON object containing exactly one key "discipline" with the c
             else:
                 res["estimated_perplexity"] = None
             return res
-        except Exception as e:
+        except Exception as parse_err:
+            friendly_think = think_content if think_content else "【模型输出解析失败】模型未返回可识别的思维链，或者输出格式损坏。"
             return {
                 "issues": [{
                     "issue_type": "json_parse_error",
                     "severity": "high",
-                    "evidence": "LLM Output Error",
-                    "explanation_zh": f"模型返回的格式损坏，无法解析。原始输出摘要：{cleaned_text[:100]}...",
-                    "explanation_ru": "Ошибка парсинга JSON",
-                    "rewrite_suggestion": "N/A"
+                    "evidence": "LLM Format Defect",
+                    "explanation_zh": f"模型返回的学术写作风格诊断格式损坏，无法解析（原始输出摘要：{cleaned_text[:100]}...）。该句已被安全放行，请继续阅读其他句子。",
+                    "explanation_ru": "Формат ответа модели поврежден и не может быть обработан.",
+                    "rewrite_suggestion": "-"
                 }],
-                "think": think_content,
-                "error": f"Failed to parse JSON: {str(e)}",
+                "think": friendly_think,
+                "error": f"Failed to parse JSON: {str(parse_err)}",
                 "raw": raw_text,
                 "safe_to_rewrite": False
             }
@@ -180,8 +206,8 @@ You must return a JSON object containing exactly one key "discipline" with the c
                     return f"<think>{reasoning}</think>\n{content}"
                 return content
         except Exception as e:
-            # Inject the error as raw text so it gets caught by json parse error
-            return f"<think>API Call Failed</think>\nAPI Error: {str(e)}"
+            # Raise the exception directly so the caller can handle API errors properly
+            raise e
             
     def _clean_json_text(self, text: str) -> tuple[str, str]:
         text = text.strip()

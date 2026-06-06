@@ -380,7 +380,10 @@ async def diagnose_stream(session_id: str):
                             result["severity"] = issue.get('severity', '')
                             result["explanation"] = issue.get('explanation_zh', '')
                             result["suggestion"] = issue.get('rewrite_suggestion', '')
-                            result["status"] = "flagged"
+                            if result["issue_type"] in ("api_request_error", "json_parse_error"):
+                                result["status"] = "passed"
+                            else:
+                                result["status"] = "flagged"
                             if not result["think"]:
                                 result["think"] = f"【专家模型判定】深度扫描检测到可疑特征：{result['explanation']}"
                         else:
@@ -496,7 +499,10 @@ async def diagnose_stream(session_id: str):
                             res_dict["severity"] = issue.get('severity', '')
                             res_dict["explanation"] = issue.get('explanation_zh', '')
                             res_dict["suggestion"] = issue.get('rewrite_suggestion', '')
-                            res_dict["status"] = "flagged"
+                            if res_dict["issue_type"] in ("api_request_error", "json_parse_error"):
+                                res_dict["status"] = "passed"
+                            else:
+                                res_dict["status"] = "flagged"
                             if not res_dict["think"]:
                                 res_dict["think"] = f"【专家模型判定】深度扫描检测到可疑特征：{res_dict['explanation']}"
                         else:
@@ -508,12 +514,10 @@ async def diagnose_stream(session_id: str):
                             
                     return res_dict
 
-                # Concurrently execute all cloud tasks
-                cloud_tasks = [process_sentence_cloud(idx, s) for idx, s in enumerate(sentences)]
-                cloud_results = await asyncio.gather(*cloud_tasks)
-                
-                # Orderly yield results and accumulate running metrics
-                for i, result in enumerate(cloud_results):
+                # Loop and execute cloud tasks serially with a small delay to prevent API rate limiting
+                for i, s in enumerate(sentences):
+                    result = await process_sentence_cloud(i, s)
+                    
                     ppl_vals.append(result["ppl"])
                     nv_ratios.append(result["metrics"]["nv_ratio"])
                     passive_counts.append(result["metrics"]["passive_count"])
@@ -539,7 +543,8 @@ async def diagnose_stream(session_id: str):
                     result["redundancy_risk"] = running_red
                     
                     yield {"event": "result", "data": json.dumps(result)}
-                    await asyncio.sleep(0.01)
+                    # 0.15s sleep between serial requests to avoid API rate limiting/timeouts
+                    await asyncio.sleep(0.15)
             
             # Final document-level risks
             pred_risk, unif_risk = calculate_style_risks(
