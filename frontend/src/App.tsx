@@ -60,6 +60,7 @@ function App() {
   const [documentText, setDocumentText] = useState<string>('');
   const [sentences, setSentences] = useState<SentenceItem[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult[]>([]);
+  const [integrityWarnings, setIntegrityWarnings] = useState<DiagnosticResult[]>([]);
   const [allDiagnostics, setAllDiagnostics] = useState<Record<number, DiagnosticResult>>({});
   const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -171,6 +172,7 @@ function App() {
     
     setIsAnalyzing(true);
     setDiagnostics([]);
+    setIntegrityWarnings([]);
     setAllDiagnostics({});
     setSelectedSentenceIndex(null);
     setSentences([]);
@@ -252,7 +254,7 @@ function App() {
         let newTotalPPL = prev.totalPPL;
         let newPplCount = prev.pplCount;
         
-        if (data.status === 'flagged') newFlagged++;
+        if (data.index >= 0 && data.status === 'flagged') newFlagged++;
         if (data.ppl !== null && !isNaN(data.ppl)) {
           newTotalPPL += data.ppl;
           newPplCount++;
@@ -262,9 +264,16 @@ function App() {
       });
       
       if (data.status === 'flagged') {
-        setDiagnostics(prev => [...prev, data]);
+        if (data.index >= 0) {
+          setDiagnostics(prev => [...prev, data]);
+        } else {
+          setIntegrityWarnings(prev => [...prev, data]);
+        }
       }
-      setAllDiagnostics(prev => ({ ...prev, [data.index]: data }));
+      
+      if (data.index >= 0) {
+        setAllDiagnostics(prev => ({ ...prev, [data.index]: data }));
+      }
       
       // Update running style risks calculated strictly on the backend
       setRunningRisks({
@@ -773,6 +782,40 @@ function App() {
                 </div>
               </div>
             ))}
+            
+            {integrityWarnings.length > 0 && (
+              <div className="glass-card slide-in" style={{ 
+                marginTop: '16px', 
+                borderLeft: '4px solid var(--apple-red-text)'
+              }}>
+                <div className="card-header" style={{ color: 'var(--apple-red-text)', marginBottom: '8px' }}>
+                  <AlertCircle size={16} color="var(--apple-red-text)" />
+                  <span style={{ fontWeight: 600 }}>参考文献规范与完整性报告 (Citation Integrity Report)</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
+                  {integrityWarnings.map((w, idx) => (
+                    <div key={idx} style={{ 
+                      background: 'var(--card-inner-bg)', 
+                      borderRadius: '8px', 
+                      padding: '10px 12px', 
+                      fontSize: '13px' 
+                    }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                        {w.text}
+                      </div>
+                      <div style={{ color: 'var(--apple-orange-text)', marginBottom: '4px' }}>
+                        {w.explanation}
+                      </div>
+                      {w.suggestion && w.suggestion !== '-' && (
+                        <div style={{ color: 'var(--apple-green-text)', fontSize: '12px', fontWeight: 500 }}>
+                          💡 建议: {w.suggestion}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             
             {isAnalyzing && (
               <div className="glass-card" style={{ opacity: 0.5, display: 'flex', justifyContent: 'center', padding: '24px' }}>

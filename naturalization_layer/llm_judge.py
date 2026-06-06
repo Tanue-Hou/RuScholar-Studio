@@ -23,7 +23,7 @@ You must return a JSON object containing exactly one key "discipline" with the c
             raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, user_prompt)
         else:
             prompt = f"<|im_start|>system\n{sys_prompt}\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n"
-            response = self.llm(prompt, max_tokens=128, stop=["<|im_end|>"])
+            response = self.llm(prompt, max_tokens=512, stop=["<|im_end|>"])
             raw_text = response["choices"][0]["text"].strip()
             
         _, cleaned_text = self._clean_json_text(raw_text)
@@ -90,10 +90,10 @@ You must return a JSON object containing exactly one key "discipline" with the c
 Правила оценки:
 1. ВНИМАНИЕ: Низкий PPL (< 15.0) указывает на повышенную предсказуемость текста (Predictability Risk). Это сигнал возможной шаблонности или машинного письма. Пожалуйста, проанализируй, является ли стиль естественным для научной статьи, и предложи улучшения, если ритм слишком монотонный. Не делай поспешных выводов о 100% авторе-роботе только по одному этому признаку.
 2. Высокий PPL (> 80.0) указывает на неестественность, плохой перевод или грамматическую перегруженность. Если также много пассивного залога или нагромождение родительного падежа, классифицируй как "machine_translation_cliche" или "style_heavy".
-3. Обязательно укажи конкретную фразу-доказательство (evidence) и объясни причину на русском (explanation_ru) и китайском (explanation_zh) языках. В объяснении обязательно явно сошлись на соответствующее правило (или нарушение правила) из предоставленной базы ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ (PhD Thesis Butler) или лингвистический критерий (например, отношение существительных к глаголам, пассивный залог), если оно применимо к данной ошибке. ВНИМАНИЕ: объяснение на китайском языке (explanation_zh) должно быть предельно кратким и емким (строго до 80-90 символов).
+3. Обязательно укажи конкретную фразу-доказательство (evidence) и объясни причину на русском (explanation_ru) и китайском (explanation_zh) языках. В объяснении обязательно явно сошлись на соответствующее правило (или нарушение правила) из предоставленной базы ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ (PhD Thesis Butler) или лингвистический критерий (например, отношение существительных к глаголам, пассивный залог), если оно применимо к данной ошибке. Объяснение на китайском языке (explanation_zh) должно быть ясным, подробным и информативным.
 4. Предложи зрелый академический вариант переписывания (rewrite_suggestion). При переписывании обязательно опирайся на ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ, лингвистические предупреждения и Контекст!
 6. В ключе "estimated_perplexity" обязательно укажи численную оценку perplexity предложения (дробное число от 5.0 до 150.0): от 10.0 до 15.0 для гладкого/шаблонного/подозреваемого в ИИ-генерации текста; от 30.0 до 50.0 для естественного академического текста человека; более 80.0 для тяжелого/перегруженного перевода.
-7. ВНИМАНИЕ: ОБЯЗАТЕЛЬНО пиши все свои размышления внутри тега <think> (если ты используешь или поддерживаешь его) исключительно на китайском языке (中文/zh-CN). Ни в коем случае не пиши размышления на русском или английском языках. Размышления могут быть подробными, но итоговое объяснение в JSON (explanation_zh) должно быть строго до 90 символов.
+7. ВНИМАНИЕ: ОБЯЗАТЕЛЬНО пиши все свои размышления внутри тега <think> (если ты используешь или поддерживаешь его) исключительно на китайском языке (中文/zh-CN). Ни в коем случае не пиши размышления на русском или английском языках. Размышления могут быть подробными. Итоговое объяснение в JSON (explanation_zh) должно быть ясным и информативным.
 
 Ответь СТРОГО в формате JSON:
 {{
@@ -117,7 +117,7 @@ You must return a JSON object containing exactly one key "discipline" with the c
                 raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, context_str)
             else:
                 # Fallback to local
-                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. However, the final explanation_zh inside the JSON object MUST be strictly under 90 Chinese characters.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
+                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. Write the final explanation_zh inside the JSON object clearly and informatively.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
                 response = self.llm(prompt, max_tokens=1536, stop=["<|im_end|>"])
                 raw_text = response["choices"][0]["text"].strip()
         except Exception as api_err:
@@ -157,14 +157,6 @@ You must return a JSON object containing exactly one key "discipline" with the c
                     res["estimated_perplexity"] = None
             else:
                 res["estimated_perplexity"] = None
-                
-            # Truncation safety guard for explanation_zh to prevent UI overflow
-            if "issues" in res and isinstance(res["issues"], list):
-                for issue in res["issues"]:
-                    if isinstance(issue, dict) and "explanation_zh" in issue and isinstance(issue["explanation_zh"], str):
-                        if len(issue["explanation_zh"]) > 100:
-                            issue["explanation_zh"] = issue["explanation_zh"][:97] + "..."
-                            
             return res
         except Exception as parse_err:
             friendly_think = think_content if think_content else "【模型输出解析失败】模型未返回可识别的思维链，或者输出格式损坏。"
