@@ -52,11 +52,16 @@ You must return a JSON object containing exactly one key "discipline" with the c
         if context_before is None: context_before = []
         if context_after is None: context_after = []
             
+        trans_warns_str = stats.get("trans_warnings", [])
+        trans_warns_bullet = "\n".join([f"  * {w}" for w in trans_warns_str]) if trans_warns_str else "  * [Нет]"
+        
         stats_str = f"""- Отношение существительных к глаголам (N/V Ratio): {stats.get('nv_ratio', 'N/A')}
 - Количество пассивных оборотов: {stats.get('passive_count', 0)}
 - Цепочки существительных в родительном падеже (Genitive Chains): {stats.get('genitive_chains', [])}
 - Найденные клише/шаблоны: {stats.get('cliches_found', [])}
 - Найденные академические связки: {stats.get('connectors_found', [])}
+- Предупреждения о машинном переводе (Translationese Warnings):
+{trans_warns_bullet}
 - Значение perplexity (PPL) предложения: {f'{ppl:.2f}' if ppl is not None else 'N/A'}"""
 
         ctx_b = " ".join(context_before)
@@ -85,9 +90,10 @@ You must return a JSON object containing exactly one key "discipline" with the c
 Правила оценки:
 1. ВНИМАНИЕ: Низкий PPL (< 15.0) указывает на повышенную предсказуемость текста (Predictability Risk). Это сигнал возможной шаблонности или машинного письма. Пожалуйста, проанализируй, является ли стиль естественным для научной статьи, и предложи улучшения, если ритм слишком монотонный. Не делай поспешных выводов о 100% авторе-роботе только по одному этому признаку.
 2. Высокий PPL (> 80.0) указывает на неестественность, плохой перевод или грамматическую перегруженность. Если также много пассивного залога или нагромождение родительного падежа, классифицируй как "machine_translation_cliche" или "style_heavy".
-3. Обязательно укажи конкретную фразу-доказательство (evidence) и объясни причину на русском и китайском языках.
-4. Предложи зрелый академический вариант переписывания (rewrite_suggestion). При переписывании опирайся на ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ и Контекст!
+3. Обязательно укажи конкретную фразу-доказательство (evidence) и объясни причину на русском (explanation_ru) и китайском (explanation_zh) языках. В объяснении обязательно явно сошлись на соответствующее правило (или нарушение правила) из предоставленной базы ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ (PhD Thesis Butler) или лингвистический критерий (например, отношение существительных к глаголам, пассивный залог), если оно применимо к данной ошибке.
+4. Предложи зрелый академический вариант переписывания (rewrite_suggestion). При переписывании обязательно опирайся на ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ, лингвистические предупреждения и Контекст!
 6. В ключе "estimated_perplexity" обязательно укажи численную оценку perplexity предложения (дробное число от 5.0 до 150.0): от 10.0 до 15.0 для гладкого/шаблонного/подозреваемого в ИИ-генерации текста; от 30.0 до 50.0 для естественного академического текста человека; более 80.0 для тяжелого/перегруженного перевода.
+7. ВНИМАНИЕ: Если ты работаешь в локальном режиме, НЕ используй теги <think> и не выводи свои размышления — сразу выводи JSON, начиная с символа '{{'. Если ты работаешь в облачном режиме с поддержкой reasoning (например, DeepSeek), ограничь свои размышления в теге <think> объемом до 100 слов.
 
 Ответь СТРОГО в формате JSON:
 {{
@@ -97,9 +103,9 @@ You must return a JSON object containing exactly one key "discipline" with the c
       "issue_type": "ai_generated_suspicion", 
       "severity": "high", 
       "evidence": "конкретная подстрока", 
-      "explanation_zh": "объяснение на китайском", 
-      "explanation_ru": "объяснение на русском", 
-      "rewrite_suggestion": "академический вариант, учитывающий контекст"
+      "explanation_zh": "объяснение на китайском с указанием правила PhD Thesis Butler", 
+      "explanation_ru": "объяснение на русском с указанием правила PhD Thesis Butler", 
+      "rewrite_suggestion": "академический вариант, учитывающий контекст и правила"
     }}
   ],
   "safe_to_rewrite": true
@@ -110,8 +116,8 @@ You must return a JSON object containing exactly one key "discipline" with the c
             raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, context_str)
         else:
             # Fallback to local
-            prompt = f"<|im_start|>system\n{sys_prompt}\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
-            response = self.llm(prompt, max_tokens=1024, stop=["<|im_end|>"])
+            prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: DO NOT use <think> tags. Do not output any reasoning text. Start your response directly with '{{' and output ONLY the raw JSON.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
+            response = self.llm(prompt, max_tokens=1536, stop=["<|im_end|>"])
             raw_text = response["choices"][0]["text"].strip()
         
         think_content, cleaned_text = self._clean_json_text(raw_text)

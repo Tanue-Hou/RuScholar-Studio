@@ -306,11 +306,19 @@ async def diagnose_stream(session_id: str):
                         }
                     }
                     
+                    trans_warnings = run_translationese_checks(s, diag_rules)
+                    if sim_warning and sim_warning["issue_type"] == "semantic_plagiarism_risk":
+                        trans_warnings.append(sim_warning)
+                        
+                    if trans_warnings:
+                        diag_rules["trans_warnings"] = [w["explanation_zh"] for w in trans_warnings]
+                    
                     has_track_a_triggers = (
                         len(diag_rules.get("cliches_found", [])) > 0 or
                         len(diag_rules.get("genitive_chains", [])) > 0 or
                         diag_rules.get("nv_ratio", 0.0) > nv_ratio_max or
-                        diag_rules.get("passive_count", 0) > 0
+                        diag_rules.get("passive_count", 0) > 0 or
+                        len(trans_warnings) > 0
                     )
                     
                     if engine_inst:
@@ -330,37 +338,21 @@ async def diagnose_stream(session_id: str):
                         is_suspicious = has_track_a_triggers
                         
                     # Run advanced translationese checks
-                    trans_warnings = run_translationese_checks(s, diag_rules)
-                    
                     if was_early_exited:
                         result["status"] = "early_exit"
                         result["think"] = (
                             f"【早期退出 (Early Exit)】评估前几个 Token 对应 Perplexity (PPL) 为 {result.get('ppl')}，"
                             f"处于学术正常分布带 ({ppl_low} ~ {ppl_high}) 且无翻译腔或套话特征。已安全退回，跳过高算力专家诊断。"
                         )
-                    elif sim_warning:
+                    elif sim_warning and sim_warning["issue_type"] == "citation_gap":
                         result["status"] = "flagged"
-                        result["issue_type"] = sim_warning["issue_type"]
-                        result["severity"] = sim_warning["severity"]
+                        result["issue_type"] = "citation_gap"
+                        result["severity"] = "high"
                         result["explanation"] = sim_warning["explanation_zh"]
                         result["suggestion"] = sim_warning["rewrite_suggestion"]
                         result["think"] = (
                             f"【学术改写与引用合规风险】该句与本地文献记录《{sim_warning['evidence']}》"
-                            f"的表达重合度达 {sim_warning.get('score', 0)}%。"
-                            + ("虽标注了文献引用，但表述句型极度贴近，为规避改写剽窃嫌疑，建议自主调整句式。"
-                               if has_citation else 
-                               "且上下文在此处缺少参考文献引标，触发『引用缺口 (Citation Gap)』警告，请补充对应标注。")
-                        )
-                    elif trans_warnings:
-                        warning = trans_warnings[0]
-                        result["status"] = "flagged"
-                        result["issue_type"] = warning["issue_type"]
-                        result["severity"] = warning["severity"]
-                        result["explanation"] = warning["explanation_zh"]
-                        result["suggestion"] = warning["rewrite_suggestion"]
-                        result["think"] = (
-                            f"【机器翻译腔特征拦截】该句触发显式的语言学启发式规则监测。"
-                            f"特征指征：{warning['evidence']}。具体原因：{warning['explanation_zh']}"
+                            f"的表达重合度高，且在此处缺少参考文献引标，触发『引用缺口 (Citation Gap)』警告，请补充对应标注。"
                         )
                     elif is_suspicious:
                         ctx_before = sentences[max(0, i-2):i]
@@ -460,30 +452,21 @@ async def diagnose_stream(session_id: str):
                     }
                     
                     trans_warnings = run_translationese_checks(text_str, diag_rules)
-                    
-                    if sim_warning:
+                    if sim_warning and sim_warning["issue_type"] == "semantic_plagiarism_risk":
+                        trans_warnings.append(sim_warning)
+                        
+                    if trans_warnings:
+                        diag_rules["trans_warnings"] = [w["explanation_zh"] for w in trans_warnings]
+                        
+                    if sim_warning and sim_warning["issue_type"] == "citation_gap":
                         res_dict["status"] = "flagged"
-                        res_dict["issue_type"] = sim_warning["issue_type"]
-                        res_dict["severity"] = sim_warning["severity"]
+                        res_dict["issue_type"] = "citation_gap"
+                        res_dict["severity"] = "high"
                         res_dict["explanation"] = sim_warning["explanation_zh"]
                         res_dict["suggestion"] = sim_warning["rewrite_suggestion"]
                         res_dict["think"] = (
                             f"【学术改写与引用合规风险】该句与本地文献记录《{sim_warning['evidence']}》"
-                            f"的表达重合度达 {sim_warning.get('score', 0)}%。"
-                            + ("虽标注了文献引用，但表述句型极度贴近，为规避改写剽窃嫌疑，建议自主调整句式。"
-                               if has_citation else 
-                               "且上下文在此处缺少参考文献引标，触发『引用缺口 (Citation Gap)』警告，请补充对应标注。")
-                        )
-                    elif trans_warnings:
-                        warning = trans_warnings[0]
-                        res_dict["status"] = "flagged"
-                        res_dict["issue_type"] = warning["issue_type"]
-                        res_dict["severity"] = warning["severity"]
-                        res_dict["explanation"] = warning["explanation_zh"]
-                        res_dict["suggestion"] = warning["rewrite_suggestion"]
-                        res_dict["think"] = (
-                            f"【机器翻译腔特征拦截】该句触发显式的语言学启发式规则监测。"
-                            f"具体原因：{warning['explanation_zh']}"
+                            f"的表达重合度高，且在此处缺少参考文献引标，触发『引用缺口 (Citation Gap)』警告，请补充对应标注。"
                         )
                     else:
                         ctx_before = sentences[max(0, idx-2):idx]
