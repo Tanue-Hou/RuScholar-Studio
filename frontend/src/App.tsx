@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, AlertCircle, LayoutDashboard } from 'lucide-react';
 import './index.css';
 
@@ -23,6 +23,44 @@ function App() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   
   const sentenceRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const [engineType, setEngineType] = useState('local');
+  const [apiKey, setApiKey] = useState('');
+  const [baseUrl, setBaseUrl] = useState('https://api.deepseek.com/v1');
+  const [localModelStatus, setLocalModelStatus] = useState<'checking'|'exists'|'missing'|'downloading'>('checking');
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [stats, setStats] = useState({ flaggedCount: 0, totalPPL: 0, pplCount: 0 });
+
+  useEffect(() => {
+    fetch('/api/check_model')
+      .then(r => r.json())
+      .then(d => setLocalModelStatus(d.exists ? 'exists' : 'missing'))
+      .catch(() => setLocalModelStatus('missing'));
+  }, []);
+
+  const downloadLocalModel = () => {
+    setLocalModelStatus('downloading');
+    setDownloadProgress(0);
+    const source = new EventSource('/api/download_model');
+    source.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.status === 'downloading') {
+        setDownloadProgress(data.progress);
+      } else if (data.status === 'complete') {
+        source.close();
+        setLocalModelStatus('exists');
+      } else if (data.status === 'error') {
+        source.close();
+        setLocalModelStatus('missing');
+        alert('Download failed: ' + data.message);
+      }
+    };
+    source.onerror = () => {
+      source.close();
+      setLocalModelStatus('missing');
+      alert('Connection error during download.');
+    };
+  };
+
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -54,8 +92,14 @@ function App() {
     setSentences([]);
     
     // Connect to SSE
-    const encodedText = encodeURIComponent(documentText);
-    const eventSource = new EventSource(`/api/diagnose?text=${encodedText}`);
+    setStats({ flaggedCount: 0, totalPPL: 0, pplCount: 0 });
+    const params = new URLSearchParams({
+      text: documentText,
+      engine_type: engineType,
+      api_key: apiKey,
+      base_url: baseUrl
+    });
+    const eventSource = new EventSource(`/api/diagnose?${params.toString()}`);
     
     eventSource.addEventListener("init", (e) => {
       const data = JSON.parse(e.data);
@@ -73,6 +117,20 @@ function App() {
         return next;
       });
       
+      setStats(prev => {
+        let newFlagged = prev.flaggedCount;
+        let newTotalPPL = prev.totalPPL;
+        let newPplCount = prev.pplCount;
+        
+        if (data.status === 'flagged') newFlagged++;
+        if (data.ppl !== null && !isNaN(data.ppl)) {
+          newTotalPPL += data.ppl;
+          newPplCount++;
+        }
+        
+        return { flaggedCount: newFlagged, totalPPL: newTotalPPL, pplCount: newPplCount };
+      });
+      
       if (data.status === 'flagged') {
         setDiagnostics(prev => [...prev, data]);
       }
@@ -81,6 +139,17 @@ function App() {
     });
     
     eventSource.addEventListener("done", () => {
+      setIsAnalyzing(false);
+      eventSource.close();
+    });
+
+    eventSource.addEventListener("error", (e: any) => {
+      try {
+        const data = JSON.parse(e.data);
+        alert("Analysis Error: " + (data.error || data.message || "Unknown error"));
+      } catch (err) {
+        alert("Analysis Error occurred.");
+      }
       setIsAnalyzing(false);
       eventSource.close();
     });
@@ -122,6 +191,47 @@ function App() {
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <select 
+            value={engineType} 
+            onChange={e => setEngineType(e.target.value)}
+            style={{ backgroundColor: 'var(--glass-bg)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '13px' }}
+          >
+            <option value="local">Local: Qwen3-4B-GGUF</option>
+            <option value="deepseek-v4-pro">Cloud: DeepSeek V4 Pro</option>
+            <option value="deepseek-v4-flash">Cloud: DeepSeek V4 Flash</option>
+          </select>
+          
+          {engineType.startsWith('deepseek') && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input 
+                type="text" 
+                placeholder="Base URL" 
+                value={baseUrl} 
+                onChange={e => setBaseUrl(e.target.value)}
+                style={{ backgroundColor: 'var(--glass-bg)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', width: '180px' }}
+              />
+              <input 
+                type="password" 
+                placeholder="API Key" 
+                value={apiKey} 
+                onChange={e => setApiKey(e.target.value)}
+                style={{ backgroundColor: 'var(--glass-bg)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', width: '150px' }}
+              />
+            </div>
+          )}
+
+          {engineType === 'local' && localModelStatus === 'missing' && (
+            <button 
+              onClick={downloadLocalModel}
+              style={{ backgroundColor: 'var(--apple-blue)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}
+            >
+              Download Local Model
+            </button>
+          )}
+
+          {engineType === 'local' && localModelStatus === 'downloading' && (
+            <div style={{ color: 'var(--apple-blue)', fontSize: '13px' }}>{Math.round(downloadProgress)}%</div>
+          )}
           <a 
             href="https://github.com/Tanue-Hou/phd-thesis-butler" 
             target="_blank" 
@@ -180,6 +290,26 @@ function App() {
         {/* Right Column: Diagnostics Stream */}
         <div className="column-right">
           <div className="stream-container">
+            {/* Global Stats */}
+            {progress.total > 0 && (
+              <div className="glass-card" style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div>
+                    <div className="text-secondary" style={{ fontSize: '12px' }}>AI Contamination Rate</div>
+                    <div style={{ fontSize: '20px', fontWeight: 600, color: stats.flaggedCount > 0 ? 'var(--apple-red)' : 'var(--apple-green)' }}>
+                      {Math.round((stats.flaggedCount / progress.total) * 100)}%
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div className="text-secondary" style={{ fontSize: '12px' }}>Avg Perplexity (PPL)</div>
+                    <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--apple-orange)' }}>
+                      {stats.pplCount > 0 ? (stats.totalPPL / stats.pplCount).toFixed(1) : '-'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {!file && (
               <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '40px' }}>
                 <FileText size={48} style={{ opacity: 0.2, margin: '0 auto 16px auto' }} />
@@ -246,6 +376,19 @@ function App() {
               <div className="glass-card" style={{ opacity: 0.5, display: 'flex', justifyContent: 'center', padding: '24px' }}>
                 <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid var(--glass-border)', borderTopColor: 'var(--text-primary)', animation: 'spin 1s linear infinite' }} />
                 <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+              </div>
+            )}
+            
+            {/* Future Extension UI (Placed after AI Queries) */}
+            {progress.total > 0 && progress.current === progress.total && !isAnalyzing && (
+              <div className="glass-card" style={{ marginTop: '24px', opacity: 0.8 }}>
+                <h3 style={{ fontSize: '14px', marginBottom: '12px', color: 'var(--text-secondary)' }}>Extension Capabilities</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>✨ 润色 (Polishing)</button>
+                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>📚 参考文献修正 (Citations)</button>
+                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>📏 格式检查 (Formatting)</button>
+                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>🏗️ 结构分析 (Structure)</button>
+                </div>
               </div>
             )}
           </div>

@@ -20,6 +20,7 @@ engine = None
 judge = None
 SKILL_RULES_PATH = os.path.expanduser("~/.gemini/config/skills/phd-thesis-butler/assets/references/polishing_rules_v5.json")
 global_skill_rules = None
+model_lock = asyncio.Lock()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -85,80 +86,122 @@ async def upload_document(file: UploadFile = File(...)):
     return {"status": "ok", "filename": file.filename, "text": text}
 
 @app.get("/api/diagnose")
-async def diagnose_stream(text: str):
+async def diagnose_stream(
+    text: str,
+    engine_type: str = "local",
+    api_key: str = "",
+    base_url: str = ""
+):
     """
     Server-Sent Events endpoint to stream the analysis of sentences.
-    Accepts raw text (URL encoded).
+    Accepts raw text (URL encoded) and configuration parameters.
     """
     async def event_generator():
-        # 1. Run Rules Engine
-        rules_res = analyze_text_rules(text)
-        sentences = rules_res["sentences"]
-        
-        # Send initial metadata
-        yield {
-            "event": "init",
-            "data": json.dumps({"total_sentences": len(sentences)})
-        }
-        
-        # 2. Iterate and process each sentence
-        for i, s in enumerate(sentences):
-            diag_rules = rules_res["sentence_diagnostics"][i]
-            run_ppl = should_run_ppl_heuristic(diag_rules, "Smart Probe")
+        try:
+            # 1. Run Rules Engine on the whole text (faster and context-aware)
+            rules_res = analyze_text_rules(text)
+            sentences = rules_res["sentences"]
             
-            result = {
-                "index": i,
-                "text": s,
-                "ppl": None,
-                "issue_type": None,
-                "severity": None,
-                "explanation": None,
-                "suggestion": None,
-                "think": None,
-                "status": "ok"
+            # Engine initialization (lazy loading)
+            engine_inst = None
+            judge_inst = None
+            
+            if engine_type == "local":
+                model_path = "../models/Qwen3-4B-Q5_K_M.gguf"
+                if os.path.exists(model_path):
+                    global engine, judge
+                    if engine is None:
+                        engine = PPLEngine(model_path)
+                        judge = StyleJudge(engine.llm)
+                    engine_inst = engine
+                    judge_inst = judge
+                else:
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({"error": "Local model not found. Please download it first."})
+                    }
+                    return
+            else:
+                # For DeepSeek API, instantiate StyleJudge with None LLM
+                judge_inst = StyleJudge(None)
+            
+            # Yield init event matching frontend expectations
+            yield {
+                "event": "init",
+                "data": json.dumps({"total_sentences": len(sentences)})
             }
             
-            if not run_ppl or not engine:
-                result["status"] = "skipped_heuristic"
-                yield {"event": "result", "data": json.dumps(result)}
-                continue
+            for i, s in enumerate(sentences):
+                diag_rules = rules_res["sentence_diagnostics"][i]
                 
-            has_track_a_triggers = (
-                len(diag_rules.get("cliches_found", [])) > 0 or
-                len(diag_rules.get("genitive_chains", [])) > 0 or
-                diag_rules.get("nv_ratio", 0.0) > 4.0 or
-                diag_rules.get("passive_count", 0) > 0
-            )
-            
-            ee_tokens = 6 if not has_track_a_triggers else 0
-            ee_lower = 15.0 if not has_track_a_triggers else 0.0
-            ee_upper = 80.0 if not has_track_a_triggers else float('inf')
-            
-            # Run inference in threadpool to not block async loop
-            ppl, was_early_exited = await asyncio.to_thread(
-                engine.evaluate_sentence_ppl, s, ee_tokens, ee_lower, ee_upper
-            )
-            
-            result["ppl"] = round(ppl, 2) if ppl else None
-            
-            if was_early_exited:
-                result["status"] = "early_exit"
-            else:
-                is_suspicious = ppl < 15.0 or ppl > 80.0 or has_track_a_triggers
-                if is_suspicious:
-                    # Extract context
+                result = {
+                    "index": i,
+                    "text": s,
+                    "ppl": None,
+                    "issue_type": None,
+                    "severity": None,
+                    "explanation": None,
+                    "suggestion": None,
+                    "think": None,
+                    "status": "ok"
+                }
+                
+                has_track_a_triggers = (
+                    len(diag_rules.get("cliches_found", [])) > 0 or
+                    len(diag_rules.get("genitive_chains", [])) > 0 or
+                    diag_rules.get("nv_ratio", 0.0) > 4.0 or
+                    diag_rules.get("passive_count", 0) > 0
+                )
+                
+                if engine_type == "local" and engine_inst:
+                    ee_tokens = 6 if not has_track_a_triggers else 0
+                    ee_lower = 15.0 if not has_track_a_triggers else 0.0
+                    ee_upper = 80.0 if not has_track_a_triggers else float('inf')
+                    
+                    async with model_lock:
+                        ppl, was_early_exited = await asyncio.to_thread(
+                            engine_inst.evaluate_sentence_ppl, s, ee_tokens, ee_lower, ee_upper
+                        )
+                    
+                    result["ppl"] = round(ppl, 2) if ppl else None
+                    is_suspicious = ppl < 15.0 or ppl > 80.0 or has_track_a_triggers
+                else:
+                    was_early_exited = False
+                    is_suspicious = has_track_a_triggers
+                
+                if was_early_exited:
+                    result["status"] = "early_exit"
+                elif is_suspicious:
                     ctx_before = sentences[max(0, i-2):i]
                     ctx_after = sentences[i+1:min(len(sentences), i+3)]
                     
-                    diag = await asyncio.to_thread(
-                        judge.diagnose_sentence, 
-                        s, 
-                        stats=diag_rules, 
-                        ppl=ppl, 
-                        context_before=ctx_before, 
-                        context_after=ctx_after,
-                        skill_rules=global_skill_rules
-                    )
+                    if engine_type == "local":
+                        async with model_lock:
+                            diag = await asyncio.to_thread(
+                                judge_inst.diagnose_sentence, 
+                                s, 
+                                stats=diag_rules, 
+                                ppl=result.get("ppl"), 
+                                context_before=ctx_before, 
+                                context_after=ctx_after,
+                                skill_rules=global_skill_rules,
+                                engine_type=engine_type,
+                                api_key=api_key,
+                                base_url=base_url
+                            )
+                    else:
+                        diag = await asyncio.to_thread(
+                            judge_inst.diagnose_sentence, 
+                            s, 
+                            stats=diag_rules, 
+                            ppl=result.get("ppl"), 
+                            context_before=ctx_before, 
+                            context_after=ctx_after,
+                            skill_rules=global_skill_rules,
+                            engine_type=engine_type,
+                            api_key=api_key,
+                            base_url=base_url
+                        )
                     
                     result["think"] = diag.get("think", "")
                     
@@ -175,12 +218,63 @@ async def diagnose_stream(text: str):
                 else:
                     result["status"] = "passed"
                     
-            yield {"event": "result", "data": json.dumps(result)}
-            # Brief pause to allow event loop to breathe
-            await asyncio.sleep(0.01)
+                yield {"event": "result", "data": json.dumps(result)}
+                # Brief pause to allow event loop to breathe
+                await asyncio.sleep(0.01)
             
-        yield {"event": "done", "data": "[]"}
+            yield {"event": "done", "data": "[]"}
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield {
+                "event": "error",
+                "data": json.dumps({"error": str(e)})
+            }
         
+    return EventSourceResponse(event_generator())
+
+@app.get("/api/check_model")
+async def check_model():
+    return {"exists": os.path.exists(MODEL_PATH)}
+
+@app.get("/api/download_model")
+async def download_model_endpoint():
+    async def event_generator():
+        try:
+            current_progress = 0
+            
+            def progress_callback(progress: float):
+                nonlocal current_progress
+                current_progress = progress * 100
+                
+            from naturalization_layer.model_downloader import download_model
+            
+            # Start download in a background thread to prevent blocking
+            task = asyncio.create_task(
+                asyncio.to_thread(download_model, MODEL_PATH, progress_callback)
+            )
+            
+            last_yielded = -1
+            while not task.done():
+                if int(current_progress) != last_yielded:
+                    last_yielded = int(current_progress)
+                    yield {
+                        "data": json.dumps({"status": "downloading", "progress": current_progress})
+                    }
+                await asyncio.sleep(0.5)
+                
+            await task
+            yield {
+                "data": json.dumps({"status": "complete"})
+            }
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            yield {
+                "data": json.dumps({"status": "error", "message": str(e)})
+            }
+            
     return EventSourceResponse(event_generator())
 
 from fastapi.staticfiles import StaticFiles

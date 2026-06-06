@@ -25,7 +25,8 @@ def test_ppl_engine_early_exit_mock(mock_llama_class):
     ppl, exited = engine.evaluate_sentence_ppl(
         "Это предложение для проверки.", 
         early_exit_tokens=6, 
-        early_exit_threshold=30.0
+        early_exit_lower=15.0,
+        early_exit_upper=150.0
     )
     
     # Check that it early exited
@@ -67,12 +68,13 @@ def test_ppl_engine_no_early_exit_mock(mock_llama_class):
     
     engine = PPLEngine("dummy_path")
     
-    # Run evaluation with early exit threshold set high (e.g. 30.0)
-    # Since PPL will be near 1.0, it should NOT early exit.
+    # Run evaluation with early exit bounds set
+    # Since PPL will be near 1.0, it should NOT early exit because PPL < 15.0.
     ppl, exited = engine.evaluate_sentence_ppl(
         "Это предложение для проверки.", 
         early_exit_tokens=6, 
-        early_exit_threshold=30.0
+        early_exit_lower=15.0,
+        early_exit_upper=80.0
     )
     
     # Check that it did NOT early exit

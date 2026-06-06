@@ -4,7 +4,7 @@ from rich.console import Console
 
 console = Console()
 
-MODEL_URL = "https://modelscope.cn/api/v1/models/Qwen/Qwen3-4B-GGUF/repo?Revision=master&FilePath=Qwen3-4B-Q5_K_M.gguf"
+MODEL_URL = "https://modelscope.cn/models/Qwen/Qwen3-4B-GGUF/resolve/master/Qwen3-4B-Q5_K_M.gguf"
 
 EXPECTED_SIZE = 2889513184
 
