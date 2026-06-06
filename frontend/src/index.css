@@ -242,3 +242,8 @@ h1, h2, h3, h4 {
     transform: translateY(0) scale(1);
   }
 }
+
+.sentence.selected-highlight {
+  background-color: rgba(10, 132, 255, 0.18) !important;
+  border-bottom: 2px solid var(--apple-blue);
+}

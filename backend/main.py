@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from naturalization_layer.rules_engine import analyze_text_rules, should_run_ppl_heuristic
 from naturalization_layer.ppl_engine import PPLEngine
 from naturalization_layer.llm_judge import StyleJudge
-from naturalization_layer.style_risk import calculate_style_risks
+from naturalization_layer.style_risk import calculate_style_risks, calculate_redundancy_risk
 from naturalization_layer.translationese_risk import calculate_translationese_risk, run_translationese_checks
 from naturalization_layer.source_similarity import check_source_similarity
 from naturalization_layer.citation_integrity import check_citation_integrity
@@ -247,8 +247,6 @@ async def diagnose_stream(session_id: str):
                 "event": "init",
                 "data": json.dumps({"total_sentences": len(sentences), "discipline": discipline})
             }
-            
-            # Yield citation integrity warnings first as global diagnostics (with index = -1, -2...)
             for w_idx, warning in enumerate(global_warnings):
                 yield {
                     "event": "result",
@@ -260,7 +258,7 @@ async def diagnose_stream(session_id: str):
                         "severity": warning["severity"],
                         "explanation": warning["explanation_zh"],
                         "suggestion": warning["rewrite_suggestion"],
-                        "think": None,
+                        "think": f"【文献完整性校验警告】对文内引文标号与篇末参考文献列表进行交叉对照发现合规风险：{warning['explanation_zh']}。这会降低论文文献引用的规范度与学术严谨度，建议在最终稿中予以修正。",
                         "status": "flagged",
                         "metrics": None,
                         "predictability_risk": 0.0,
@@ -277,6 +275,8 @@ async def diagnose_stream(session_id: str):
             passive_counts = []
             genitive_chain_counts = []
             cliche_counts = []
+            word_counts = []
+            connectors_counts = []
             
             for i, s in enumerate(sentences):
                 diag_rules = rules_res["sentence_diagnostics"][i]
@@ -299,7 +299,8 @@ async def diagnose_stream(session_id: str):
                         "nv_ratio": diag_rules.get("nv_ratio", 0.0),
                         "passive_count": diag_rules.get("passive_count", 0),
                         "genitive_chains_count": len(diag_rules.get("genitive_chains", [])),
-                        "cliches_count": len(diag_rules.get("cliches_found", []))
+                        "cliches_count": len(diag_rules.get("cliches_found", [])),
+                        "connectors_count": len(diag_rules.get("connectors_found", []))
                     }
                 }
                 
@@ -318,8 +319,8 @@ async def diagnose_stream(session_id: str):
                     async with model_lock:
                         ppl, was_early_exited = await asyncio.to_thread(
                             engine_inst.evaluate_sentence_ppl, s, ee_tokens, ee_lower, ee_upper
-                           )
-                       
+                        )
+                        
                     result["ppl"] = round(ppl, 2) if ppl else None
                     is_suspicious = ppl < ppl_low or ppl > ppl_high or has_track_a_triggers
                 else:
@@ -331,6 +332,10 @@ async def diagnose_stream(session_id: str):
                 
                 if was_early_exited:
                     result["status"] = "early_exit"
+                    result["think"] = (
+                        f"【早期退出 (Early Exit)】评估前几个 Token 对应 Perplexity (PPL) 为 {result.get('ppl')}，"
+                        f"处于学术正常分布带 ({ppl_low} ~ {ppl_high}) 且无翻译腔或套话特征。已安全退回，跳过高算力专家诊断。"
+                    )
                 elif sim_warning:
                     # High priority citation/source alignment warnings
                     result["status"] = "flagged"
@@ -338,6 +343,13 @@ async def diagnose_stream(session_id: str):
                     result["severity"] = sim_warning["severity"]
                     result["explanation"] = sim_warning["explanation_zh"]
                     result["suggestion"] = sim_warning["rewrite_suggestion"]
+                    result["think"] = (
+                        f"【学术改写与引用合规风险】该句与本地文献记录《{sim_warning['evidence']}》"
+                        f"的表达重合度达 {sim_warning.get('score', 0)}%。"
+                        + ("虽标注了文献引用，但表述句型极度贴近，为规避改写剽窃嫌疑，建议自主调整句式。"
+                           if has_citation else 
+                           "且上下文在此处缺少参考文献引标，触发『引用缺口 (Citation Gap)』警告，请补充对应标注。")
+                    )
                 elif trans_warnings:
                     # Custom linguistic heuristics warnings
                     warning = trans_warnings[0]
@@ -346,6 +358,10 @@ async def diagnose_stream(session_id: str):
                     result["severity"] = warning["severity"]
                     result["explanation"] = warning["explanation_zh"]
                     result["suggestion"] = warning["rewrite_suggestion"]
+                    result["think"] = (
+                        f"【机器翻译腔特征拦截】该句触发显式的语言学启发式规则监测。"
+                        f"特征指征：{warning['evidence']}。具体原因：{warning['explanation_zh']}"
+                    )
                 elif is_suspicious:
                     ctx_before = sentences[max(0, i-2):i]
                     ctx_after = sentences[i+1:min(len(sentences), i+3)]
@@ -388,10 +404,20 @@ async def diagnose_stream(session_id: str):
                         result["explanation"] = issue.get('explanation_zh', '')
                         result["suggestion"] = issue.get('rewrite_suggestion', '')
                         result["status"] = "flagged"
+                        if not result["think"]:
+                            result["think"] = f"【专家模型判定】深度扫描检测到可疑特征：{result['explanation']}"
                     else:
                         result["status"] = "passed"
+                        result["think"] = (
+                            f"【深度扫描通过】句子经专家大模型多维度推理评估，尽管 Perplexity 偏离或有轻微规则触碰，"
+                            f"但其整体语义连贯、学术表述符合规范，无显著的机器翻译或 AI 生成痕迹。"
+                        )
                 else:
                     result["status"] = "passed"
+                    result["think"] = (
+                        f"【规则通过】句子未触发生感官低 PPL 警报，亦无学术套话、拖沓修饰长链。"
+                        f"名词动词比率（{result['metrics']['nv_ratio']}）处于健康带，语态逻辑清晰，通过风格初筛。"
+                    )
                 
                 # Append to metric trackers
                 ppl_vals.append(result["ppl"])
@@ -399,14 +425,20 @@ async def diagnose_stream(session_id: str):
                 passive_counts.append(result["metrics"]["passive_count"])
                 genitive_chain_counts.append(result["metrics"]["genitive_chains_count"])
                 cliche_counts.append(result["metrics"]["cliches_count"])
+                word_counts.append(diag_rules.get("word_count", len(s.split())))
+                connectors_counts.append(result["metrics"]["connectors_count"])
+                
                 if result["status"] == "flagged":
                     flagged_count += 1
                     
                 # Calculate running risks for real-time telemetry (consolidated backend calculation)
-                running_pred, running_unif = calculate_style_risks(ppl_vals, flagged_count, i + 1, calib)
+                running_pred, running_unif = calculate_style_risks(
+                    ppl_vals, flagged_count, i + 1, calib, word_counts=word_counts
+                )
                 running_trans = calculate_translationese_risk(nv_ratios, passive_counts, genitive_chain_counts)
-                cliche_sent_count = sum(1 for c in cliche_counts if c > 0)
-                running_red = round((cliche_sent_count / (i + 1)) * 100, 1)
+                running_red = calculate_redundancy_risk(
+                    cliche_counts, genitive_chain_counts, passive_counts, nv_ratios, connectors_counts
+                )
                 
                 result["predictability_risk"] = running_pred
                 result["uniformity_risk"] = running_unif
@@ -418,10 +450,13 @@ async def diagnose_stream(session_id: str):
                 await asyncio.sleep(0.01)
             
             # Final document-level risks
-            pred_risk, unif_risk = calculate_style_risks(ppl_vals, flagged_count, len(sentences), calib)
+            pred_risk, unif_risk = calculate_style_risks(
+                ppl_vals, flagged_count, len(sentences), calib, word_counts=word_counts
+            )
             trans_risk = calculate_translationese_risk(nv_ratios, passive_counts, genitive_chain_counts)
-            cliche_sent_count = sum(1 for c in cliche_counts if c > 0)
-            redundancy_risk = round((cliche_sent_count / max(1, len(sentences))) * 100, 1)
+            redundancy_risk = calculate_redundancy_risk(
+                cliche_counts, genitive_chain_counts, passive_counts, nv_ratios, connectors_counts
+            )
             
             yield {
                 "event": "done",

@@ -50,6 +50,8 @@ function App() {
   const [documentText, setDocumentText] = useState<string>('');
   const [sentences, setSentences] = useState<SentenceItem[]>([]);
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult[]>([]);
+  const [allDiagnostics, setAllDiagnostics] = useState<Record<number, DiagnosticResult>>({});
+  const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   
@@ -148,6 +150,8 @@ function App() {
     
     setIsAnalyzing(true);
     setDiagnostics([]);
+    setAllDiagnostics({});
+    setSelectedSentenceIndex(null);
     setSentences([]);
     setStats({ flaggedCount: 0, totalPPL: 0, pplCount: 0 });
     setRunningRisks({ predictability: 0, uniformity: 0, translationese: 0, redundancy: 0 });
@@ -238,6 +242,7 @@ function App() {
       if (data.status === 'flagged') {
         setDiagnostics(prev => [...prev, data]);
       }
+      setAllDiagnostics(prev => ({ ...prev, [data.index]: data }));
       
       // Update running style risks calculated strictly on the backend
       setRunningRisks({
@@ -418,8 +423,10 @@ function App() {
                   <span 
                     key={idx} 
                     ref={el => { sentenceRefs.current[idx] = el; }}
-                    className={`sentence ${s.status}`}
+                    className={`sentence ${s.status} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
                     title={s.status}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSelectedSentenceIndex(idx)}
                   >
                     {s.text}
                     {s.ppl !== undefined && s.ppl !== null && (
@@ -535,11 +542,122 @@ function App() {
               </div>
             )}
             
+            {/* Selected Sentence Inspector */}
+            {file && (
+              <div className="glass-card" style={{ 
+                marginBottom: '20px', 
+                border: '1px solid var(--apple-blue)', 
+                background: 'rgba(0, 122, 255, 0.04)',
+                padding: '16px',
+                borderRadius: '12px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <LayoutDashboard size={16} color="var(--apple-blue)" />
+                    <span style={{ fontWeight: 600, color: 'var(--apple-blue)', fontSize: '14px' }}>
+                      风格透视 (Sentence Inspector)
+                    </span>
+                  </div>
+                  {selectedSentenceIndex !== null && (
+                    <button 
+                      onClick={() => setSelectedSentenceIndex(null)}
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        color: 'var(--text-tertiary)', 
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                {selectedSentenceIndex === null ? (
+                  <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', textAlign: 'center', padding: '10px 0' }}>
+                    💡 点击左侧文档中的任意句子，在此透视模型深度分析及风格修改建议。
+                  </p>
+                ) : (
+                  <div>
+                    {allDiagnostics[selectedSentenceIndex] ? (
+                      <div>
+                        <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.5', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '6px' }}>
+                          "{allDiagnostics[selectedSentenceIndex].text}"
+                        </p>
+                        
+                        <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                          <div className="metric-row" style={{ marginTop: 0 }}>
+                            <span className="text-secondary font-mono">PPL (Perplexity)</span>
+                            <span className="metric-value font-mono" style={{ 
+                              color: allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 15 ? 'var(--apple-red)' : allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 25 ? 'var(--apple-orange)' : 'var(--text-secondary)'
+                            }}>
+                              {allDiagnostics[selectedSentenceIndex].ppl !== null ? allDiagnostics[selectedSentenceIndex].ppl : 'N/A (API模式)'}
+                            </span>
+                          </div>
+                          
+                          <div className="metric-row">
+                            <span className="text-secondary">Status</span>
+                            <span style={{ 
+                              color: allDiagnostics[selectedSentenceIndex].status === 'flagged' ? 'var(--apple-red)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? 'var(--apple-blue)' : 'var(--apple-green)',
+                              fontWeight: 600
+                            }}>
+                              {allDiagnostics[selectedSentenceIndex].status === 'flagged' ? '风格警报 (Flagged)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? '早退通过 (Early Exit)' : '通过 (Passed)'}
+                            </span>
+                          </div>
+
+                          {allDiagnostics[selectedSentenceIndex].metrics && (
+                            <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                <div>名/动比率: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.nv_ratio}</span></div>
+                                <div>被动语态: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.passive_count}</span></div>
+                                <div>第二格长链: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.genitive_chains_count}</span></div>
+                                <div>套话匹配: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.cliches_count}</span></div>
+                              </div>
+                            </div>
+                          )}
+
+                          {allDiagnostics[selectedSentenceIndex].think && (
+                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
+                              <p className="text-secondary" style={{ marginBottom: '4px' }}>Model Reasoning (模型诊断原因)</p>
+                              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '4px', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
+                                {allDiagnostics[selectedSentenceIndex].think}
+                              </p>
+                            </div>
+                          )}
+
+                          {allDiagnostics[selectedSentenceIndex].explanation && (
+                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
+                              <p className="text-secondary" style={{ marginBottom: '4px' }}>Analysis</p>
+                              <p style={{ color: allDiagnostics[selectedSentenceIndex].issue_type === 'json_parse_error' ? 'var(--apple-red)' : 'var(--apple-orange)' }}>
+                                {allDiagnostics[selectedSentenceIndex].explanation}
+                              </p>
+                            </div>
+                          )}
+
+                          {allDiagnostics[selectedSentenceIndex].suggestion && allDiagnostics[selectedSentenceIndex].suggestion !== 'N/A' && allDiagnostics[selectedSentenceIndex].suggestion !== '-' && (
+                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
+                              <p className="text-secondary" style={{ marginBottom: '4px' }}>Suggestion (修改建议)</p>
+                              <p style={{ color: 'var(--apple-green)' }}>{allDiagnostics[selectedSentenceIndex].suggestion}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', textAlign: 'center' }}>
+                        Sentence clicked, waiting for diagnostic stream results...
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {diagnostics.map((diag, i) => (
               <div 
                 key={i} 
                 className="glass-card slide-in" 
-                onClick={() => scrollToSentence(diag.index)}
+                onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
               >
                 <div className="card-header">
                   <AlertCircle size={16} color="var(--apple-red)" />
