@@ -37,20 +37,20 @@ interface SentenceItem {
 }
 
 const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string }> = {
-  SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学⟣工程技术)", color: "var(--apple-blue)" },
-  AUTOMATION_CONTROL: { en: "Automation & Control Engineering", zh: "自动化与控制工程", color: "var(--apple-orange)" },
-  AGRI_MED: { en: "Agricultural & Medical Sciences", zh: "农田与医药生命科学", color: "var(--apple-green)" },
-  HUM_POL_ECON: { en: "Humanities & Social Sciences", zh: "人文社科 (政治经济与社会科学)", color: "var(--apple-purple)" },
-  ARTS_SPORTS: { en: "Arts, Sports & Culture", zh: "艺术体育与文化研究", color: "var(--apple-pink)" },
+  SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学⟣工程技术)", color: "var(--apple-blue-text)" },
+  AUTOMATION_CONTROL: { en: "Automation & Control Engineering", zh: "自动化与控制工程", color: "var(--apple-orange-text)" },
+  AGRI_MED: { en: "Agricultural & Medical Sciences", zh: "农田与医药生命科学", color: "var(--apple-green-text)" },
+  HUM_POL_ECON: { en: "Humanities & Social Sciences", zh: "人文社科 (政治经济与社会科学)", color: "var(--apple-purple-text)" },
+  ARTS_SPORTS: { en: "Arts, Sports & Culture", zh: "艺术体育与文化研究", color: "var(--apple-pink-text)" },
   UNIVERSAL: { en: "Universal Academic Domain", zh: "通用学术与跨学科领域", color: "var(--text-secondary)" }
 };
 
 const ISSUE_TITLE_MAP: Record<string, { title: string; color: string }> = {
-  ai_generated_suspicion: { title: "AI 生成特征预警 (AI Writing Detected)", color: "var(--apple-red)" },
-  machine_translation_cliche: { title: "机器翻译与学术套话 (Translationese & Cliché)", color: "var(--apple-orange)" },
-  citation_gap: { title: "引用缺失风险 (Citation Gap Alert)", color: "var(--apple-red)" },
-  semantic_plagiarism_risk: { title: "学术改写重合风险 (High Similarity Risk)", color: "var(--apple-orange)" },
-  style_heavy: { title: "句式臃肿与冗余 (Style Overloaded)", color: "var(--apple-purple)" },
+  ai_generated_suspicion: { title: "AI 生成特征预警 (AI Writing Detected)", color: "var(--apple-red-text)" },
+  machine_translation_cliche: { title: "机器翻译与学术套话 (Translationese & Cliché)", color: "var(--apple-orange-text)" },
+  citation_gap: { title: "引用缺失风险 (Citation Gap Alert)", color: "var(--apple-red-text)" },
+  semantic_plagiarism_risk: { title: "学术改写重合风险 (High Similarity Risk)", color: "var(--apple-orange-text)" },
+  style_heavy: { title: "句式臃肿与冗余 (Style Overloaded)", color: "var(--apple-purple-text)" },
   json_parse_error: { title: "格式解析异常 (Formatting Parse Alert)", color: "var(--text-secondary)" },
   api_request_error: { title: "云端服务连接异常 (API Connection Alert)", color: "var(--text-secondary)" },
 };
@@ -67,6 +67,7 @@ function App() {
   
   const sentenceRefs = useRef<(HTMLSpanElement | null)[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const rightColumnRef = useRef<HTMLDivElement | null>(null);
   const [engineType, setEngineType] = useState('local');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('https://api.deepseek.com/v1');
@@ -317,9 +318,11 @@ function App() {
   };
 
   const scrollToSentence = (index: number) => {
-    if (index >= 0 && sentenceRefs.current[index]) {
-      sentenceRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    setTimeout(() => {
+      if (index >= 0 && sentenceRefs.current[index]) {
+        sentenceRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 50);
   };
 
   return (
@@ -333,7 +336,7 @@ function App() {
           <span style={{ color: 'var(--text-secondary)', fontSize: '15px' }}>Style Diagnostics</span>
           <span style={{ 
             backgroundColor: 'rgba(255, 69, 58, 0.1)', 
-            color: 'var(--apple-red)', 
+            color: 'var(--apple-red-text)', 
             padding: '2px 8px', 
             borderRadius: '4px', 
             fontSize: '11px', 
@@ -476,14 +479,17 @@ function App() {
                     className={`sentence ${s.status} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
                     title={s.status}
                     style={{ cursor: 'pointer' }}
-                    onClick={() => setSelectedSentenceIndex(idx)}
+                    onClick={() => {
+                      setSelectedSentenceIndex(idx);
+                      rightColumnRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
                   >
                     {s.text}
                     {s.ppl !== undefined && s.ppl !== null && (
                       <sub 
                         className="ppl-tag font-mono" 
                         style={{ 
-                          color: s.ppl < 15 ? 'var(--apple-red)' : s.ppl < 25 ? 'var(--apple-orange)' : 'var(--text-secondary)',
+                          color: s.ppl < 15 ? 'var(--apple-red-text)' : s.ppl < 25 ? 'var(--apple-orange-text)' : 'var(--text-secondary)',
                           marginLeft: '4px',
                           fontSize: '10px',
                           verticalAlign: 'sub',
@@ -503,7 +509,7 @@ function App() {
         </div>
 
         {/* Right Column: Diagnostics Stream */}
-        <div className="column-right">
+        <div className="column-right" ref={rightColumnRef}>
           <div className="stream-container">
             {file && (
               <div className="glass-card" style={{ marginBottom: '8px', borderLeft: `4px solid ${DISCIPLINE_MAP[discipline]?.color || 'var(--text-secondary)'}`, transition: 'all 0.5s ease' }}>
@@ -521,17 +527,17 @@ function App() {
 
             {/* Global Stats & Telemetry */}
             {progress.total > 0 && (
-              <div className="glass-card" style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.03)' }}>
+              <div className="glass-card" style={{ marginBottom: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
                   <div>
                     <div className="text-secondary" style={{ fontSize: '12px' }}>Style Risk / 风格风险率</div>
-                    <div style={{ fontSize: '20px', fontWeight: 600, color: stats.flaggedCount > 0 ? 'var(--apple-red)' : 'var(--apple-green)' }}>
+                    <div style={{ fontSize: '20px', fontWeight: 600, color: stats.flaggedCount > 0 ? 'var(--apple-red-text)' : 'var(--apple-green-text)' }}>
                       {Math.round((stats.flaggedCount / progress.total) * 100)}%
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div className="text-secondary" style={{ fontSize: '12px' }}>Avg Perplexity (PPL)</div>
-                    <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--apple-orange)' }}>
+                    <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--apple-orange-text)' }}>
                       {stats.pplCount > 0 ? (stats.totalPPL / stats.pplCount).toFixed(1) : '-'}
                     </div>
                   </div>
@@ -542,9 +548,9 @@ function App() {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Predictability Risk (可预测性风险)</span>
-                      <span style={{ fontWeight: 600, color: 'var(--apple-blue)' }}>{runningRisks.predictability}%</span>
+                      <span style={{ fontWeight: 600, color: 'var(--apple-blue-text)' }}>{runningRisks.predictability}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', background: 'var(--card-inner-bg)', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${runningRisks.predictability}%`, background: 'var(--apple-blue)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
                     </div>
                   </div>
@@ -553,9 +559,9 @@ function App() {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Uniformity Risk (句式均匀性风险)</span>
-                      <span style={{ fontWeight: 600, color: 'var(--apple-purple)' }}>{runningRisks.uniformity}%</span>
+                      <span style={{ fontWeight: 600, color: 'var(--apple-purple-text)' }}>{runningRisks.uniformity}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', background: 'var(--card-inner-bg)', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${runningRisks.uniformity}%`, background: 'var(--apple-purple)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
                     </div>
                   </div>
@@ -564,9 +570,9 @@ function App() {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Translationese Risk (翻译腔风险)</span>
-                      <span style={{ fontWeight: 600, color: 'var(--apple-orange)' }}>{runningRisks.translationese}%</span>
+                      <span style={{ fontWeight: 600, color: 'var(--apple-orange-text)' }}>{runningRisks.translationese}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', background: 'var(--card-inner-bg)', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${runningRisks.translationese}%`, background: 'var(--apple-orange)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
                     </div>
                   </div>
@@ -575,9 +581,9 @@ function App() {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>Redundancy Risk (语义冗余风险)</span>
-                      <span style={{ fontWeight: 600, color: 'var(--apple-red)' }}>{runningRisks.redundancy}%</span>
+                      <span style={{ fontWeight: 600, color: 'var(--apple-red-text)' }}>{runningRisks.redundancy}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', background: 'var(--card-inner-bg)', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${runningRisks.redundancy}%`, background: 'var(--apple-red)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
                     </div>
                   </div>
@@ -603,8 +609,8 @@ function App() {
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <LayoutDashboard size={16} color="var(--apple-blue)" />
-                    <span style={{ fontWeight: 600, color: 'var(--apple-blue)', fontSize: '14px' }}>
+                    <LayoutDashboard size={16} color="var(--apple-blue-text)" />
+                    <span style={{ fontWeight: 600, color: 'var(--apple-blue-text)', fontSize: '14px' }}>
                       风格透视 (Sentence Inspector)
                     </span>
                   </div>
@@ -626,21 +632,22 @@ function App() {
 
                 {selectedSentenceIndex === null ? (
                   <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', textAlign: 'center', padding: '10px 0' }}>
-                    💡 点击左侧文档中的任意句子，在此透视模型深度分析及风格修改建议。
+                    💡 点击左侧文档中的任意句子，在此透视模型深度 analysis 及风格修改建议。
                   </p>
                 ) : (
                   <div>
                     {allDiagnostics[selectedSentenceIndex] ? (
                       <div>
-                        <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.5', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '6px' }}>
+                        <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.5', background: 'var(--card-inner-bg)', padding: '10px', borderRadius: '6px' }}>
                           "{allDiagnostics[selectedSentenceIndex].text}"
                         </p>
                         
-                        <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                        <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
                           <div className="metric-row" style={{ marginTop: 0 }}>
                             <span className="text-secondary font-mono">PPL (Perplexity)</span>
                             <span className="metric-value font-mono" style={{ 
-                              color: allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 15 ? 'var(--apple-red)' : allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 25 ? 'var(--apple-orange)' : 'var(--text-secondary)'
+                              color: allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 15 ? 'var(--apple-red-text)' : allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 25 ? 'var(--apple-orange-text)' : 'var(--text-secondary)',
+                              fontWeight: 600
                             }}>
                               {allDiagnostics[selectedSentenceIndex].ppl !== null ? allDiagnostics[selectedSentenceIndex].ppl : 'N/A (API模式)'}
                             </span>
@@ -649,7 +656,7 @@ function App() {
                           <div className="metric-row">
                             <span className="text-secondary">Status</span>
                             <span style={{ 
-                              color: allDiagnostics[selectedSentenceIndex].status === 'flagged' ? 'var(--apple-red)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? 'var(--apple-blue)' : 'var(--apple-green)',
+                              color: allDiagnostics[selectedSentenceIndex].status === 'flagged' ? 'var(--apple-red-text)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? 'var(--apple-blue-text)' : 'var(--apple-green-text)',
                               fontWeight: 600
                             }}>
                               {allDiagnostics[selectedSentenceIndex].status === 'flagged' ? '风格警报 (Flagged)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? '早退通过 (Early Exit)' : '通过 (Passed)'}
@@ -657,7 +664,7 @@ function App() {
                           </div>
 
                           {allDiagnostics[selectedSentenceIndex].metrics && (
-                            <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px' }}>
+                            <div style={{ marginTop: '8px', padding: '8px', background: 'var(--card-inner-bg)', borderRadius: '6px' }}>
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: 'var(--text-secondary)' }}>
                                 <div>名/动比率: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.nv_ratio}</span></div>
                                 <div>被动语态: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.passive_count}</span></div>
@@ -669,17 +676,21 @@ function App() {
 
                           {allDiagnostics[selectedSentenceIndex].think && (
                             <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
-                              <p className="text-secondary" style={{ marginBottom: '4px' }}>Model Reasoning (模型诊断原因)</p>
-                              <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '4px', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-                                {allDiagnostics[selectedSentenceIndex].think}
-                              </p>
+                              <details style={{ cursor: 'pointer' }}>
+                                <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none' }}>
+                                  ▶ View Model Reasoning (模型诊断原因)
+                                </summary>
+                                <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '8px', whiteSpace: 'pre-wrap', lineHeight: '1.4', fontFamily: 'var(--font-mono)' }}>
+                                  {allDiagnostics[selectedSentenceIndex].think}
+                                </p>
+                              </details>
                             </div>
                           )}
 
                           {allDiagnostics[selectedSentenceIndex].explanation && (
                             <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
                               <p className="text-secondary" style={{ marginBottom: '4px' }}>Analysis</p>
-                              <p style={{ color: allDiagnostics[selectedSentenceIndex].issue_type === 'json_parse_error' ? 'var(--apple-red)' : 'var(--apple-orange)' }}>
+                              <p style={{ color: allDiagnostics[selectedSentenceIndex].issue_type === 'json_parse_error' ? 'var(--apple-red-text)' : 'var(--apple-orange-text)' }}>
                                 {allDiagnostics[selectedSentenceIndex].explanation}
                               </p>
                             </div>
@@ -688,7 +699,7 @@ function App() {
                           {allDiagnostics[selectedSentenceIndex].suggestion && allDiagnostics[selectedSentenceIndex].suggestion !== 'N/A' && allDiagnostics[selectedSentenceIndex].suggestion !== '-' && (
                             <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
                               <p className="text-secondary" style={{ marginBottom: '4px' }}>Suggestion (修改建议)</p>
-                              <p style={{ color: 'var(--apple-green)' }}>{allDiagnostics[selectedSentenceIndex].suggestion}</p>
+                              <p style={{ color: 'var(--apple-green-text)', fontWeight: 500 }}>{allDiagnostics[selectedSentenceIndex].suggestion}</p>
                             </div>
                           )}
                         </div>
@@ -710,7 +721,7 @@ function App() {
                 onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
               >
                 {(() => {
-                  const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange)" };
+                  const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange-text)" };
                   return (
                     <div className="card-header" style={{ color: issueInfo.color }}>
                       <AlertCircle size={16} color={issueInfo.color} />
@@ -723,14 +734,14 @@ function App() {
                   "{diag.text.substring(0, 80)}..."
                 </p>
                 
-                <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
+                <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
                   <div className="metric-row" style={{ marginTop: 0 }}>
                     <span className="text-secondary font-mono">PPL (Perplexity)</span>
-                    <span className="metric-value red font-mono">{diag.ppl}</span>
+                    <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl}</span>
                   </div>
                   <div className="metric-row">
                     <span className="text-secondary">Issue</span>
-                    <span>{diag.issue_type}</span>
+                    <span style={{ fontWeight: 500 }}>{diag.issue_type}</span>
                   </div>
                   
                   {diag.think && (
@@ -739,7 +750,7 @@ function App() {
                         <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none' }}>
                           ▶ View Model Reasoning
                         </summary>
-                        <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '8px', whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
+                        <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '8px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)' }}>
                           {diag.think}
                         </p>
                       </details>
@@ -749,14 +760,14 @@ function App() {
                   {diag.explanation && (
                     <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
                       <p className="text-secondary" style={{ marginBottom: '4px' }}>Analysis</p>
-                      <p style={{ color: diag.issue_type === 'json_parse_error' ? 'var(--apple-red)' : 'var(--apple-orange)' }}>{diag.explanation}</p>
+                      <p style={{ color: diag.issue_type === 'json_parse_error' ? 'var(--apple-red-text)' : 'var(--apple-orange-text)' }}>{diag.explanation}</p>
                     </div>
                   )}
                   
                   {diag.suggestion && diag.suggestion !== 'N/A' && (
                     <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
                       <p className="text-secondary" style={{ marginBottom: '4px' }}>Suggestion</p>
-                      <p style={{ color: 'var(--apple-green)' }}>{diag.suggestion}</p>
+                      <p style={{ color: 'var(--apple-green-text)', fontWeight: 500 }}>{diag.suggestion}</p>
                     </div>
                   )}
                 </div>
@@ -775,10 +786,10 @@ function App() {
               <div className="glass-card" style={{ marginTop: '24px', opacity: 0.8 }}>
                 <h3 style={{ fontSize: '14px', marginBottom: '12px', color: 'var(--text-secondary)' }}>Extension Capabilities</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>✨ 润色 (Polishing)</button>
-                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>📚 参考文献修正 (Citations)</button>
-                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>📏 格式检查 (Formatting)</button>
-                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}>🏗️ 结构分析 (Structure)</button>
+                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'var(--card-inner-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer' }}>✨ 润色 (Polishing)</button>
+                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'var(--card-inner-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer' }}>📚 参考文献修正 (Citations)</button>
+                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'var(--card-inner-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer' }}>📏 格式检查 (Formatting)</button>
+                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'var(--card-inner-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer' }}>🏗️ 结构分析 (Structure)</button>
                 </div>
               </div>
             )}
