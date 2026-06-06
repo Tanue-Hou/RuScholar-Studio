@@ -168,8 +168,18 @@ async def detect_discipline_endpoint(req: DetectDisciplineRequest):
                     judge_inst.detect_discipline, req.text, req.engine_type, req.api_key, req.base_url
                 )
         except Exception as e:
-            print(f"Discipline detection failed: {e}. Falling back to UNIVERSAL.")
-            discipline = "UNIVERSAL"
+            print(f"Discipline detection failed: {e}. Falling back to keywords.")
+            text_lower = req.text.lower()
+            if any(w in text_lower for w in ["управление", "робот", "автоматиз", "регулятор", "динамик", "control", "robot", "automat", "cybernetic", "feedback"]):
+                discipline = "AUTOMATION_CONTROL"
+            elif any(w in text_lower for w in ["биолог", "медиц", "клетк", "терап", "ген", "biolog", "medic", "cell", "gene", "patient", "clinical", "dna", "rna"]):
+                discipline = "AGRI_MED"
+            elif any(w in text_lower for w in ["физик", "хими", "сплав", "материал", "энерг", "physic", "chemic", "material", "alloy", "thermodynamic", "mechanic"]):
+                discipline = "SCI_TECH"
+            elif any(w in text_lower for w in ["эконом", "полити", "гуманитар", "истори", "обществ", "econom", "polit", "social", "humanit", "history", "societ"]):
+                discipline = "HUM_POL_ECON"
+            else:
+                discipline = "UNIVERSAL"
             
     return {"discipline": discipline}
 

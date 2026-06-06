@@ -19,32 +19,37 @@ You must return a JSON object containing exactly one key "discipline" with the c
 
         user_prompt = f"Text snippet (first 1000 chars):\n{text_snippet[:1000]}"
         
-        if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash"):
-            raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, user_prompt)
-        else:
-            prompt = f"<|im_start|>system\n{sys_prompt}\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n"
-            response = self.llm(prompt, max_tokens=512, stop=["<|im_end|>"])
-            raw_text = response["choices"][0]["text"].strip()
-            
-        _, cleaned_text = self._clean_json_text(raw_text)
+        raw_text = ""
         try:
+            if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash"):
+                raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, user_prompt)
+            else:
+                prompt = f"<|im_start|>system\n{sys_prompt}\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n"
+                response = self.llm(prompt, max_tokens=512, stop=["<|im_end|>"])
+                raw_text = response["choices"][0]["text"].strip()
+                
+            _, cleaned_text = self._clean_json_text(raw_text)
             res = json.loads(cleaned_text)
             discipline = res.get("discipline", "UNIVERSAL").upper()
-            if discipline in ("SCI_TECH", "AUTOMATION_CONTROL", "AGRI_MED", "HUM_POL_ECON", "ARTS_SPORTS", "UNIVERSAL"):
+            if discipline in ("SCI_TECH", "AUTOMATION_CONTROL", "AGRI_MED", "HUM_POL_ECON", "ARTS_SPORTS"):
                 return discipline
-            return "UNIVERSAL"
-        except:
-            # Fallback based on simple keyword search if LLM fails or returns garbage
-            text_lower = text_snippet.lower()
-            if any(w in text_lower for w in ["управление", "робот", "автоматиз", "регулятор", "динамик"]):
-                return "AUTOMATION_CONTROL"
-            if any(w in text_lower for w in ["биолог", "медиц", "клетк", "терап", "ген"]):
-                return "AGRI_MED"
-            if any(w in text_lower for w in ["физик", "хими", "сплав", "материал", "энерг"]):
-                return "SCI_TECH"
-            if any(w in text_lower for w in ["эконом", "полити", "гуманитар", "истори", "обществ"]):
-                return "HUM_POL_ECON"
-            return "UNIVERSAL"
+        except Exception as e:
+            print(f"Model discipline detection failed or returned invalid result: {e}. Falling back to keywords.")
+            
+        # Fallback based on simple keyword search (supports both Russian and English)
+        text_lower = text_snippet.lower()
+        if any(w in text_lower for w in ["управление", "робот", "автоматиз", "регулятор", "динамик", "control", "robot", "automat", "cybernetic", "feedback"]):
+            return "AUTOMATION_CONTROL"
+        if any(w in text_lower for w in ["биолог", "медиц", "клетк", "терап", "ген", "biolog", "medic", "cell", "gene", "patient", "clinical", "dna", "rna"]):
+            return "AGRI_MED"
+        if any(w in text_lower for w in ["физик", "хими", "сплав", "материал", "энерг", "physic", "chemic", "material", "alloy", "thermodynamic", "mechanic"]):
+            return "SCI_TECH"
+        if any(w in text_lower for w in ["эконом", "полити", "гуманитар", "истори", "обществ", "econom", "polit", "social", "humanit", "history", "societ"]):
+            return "HUM_POL_ECON"
+        if any(w in text_lower for w in ["искусств", "спорт", "культур", "музык", "art", "sport", "cultur", "music", "athlet", "paint"]):
+            return "ARTS_SPORTS"
+            
+        return "UNIVERSAL"
 
     def diagnose_sentence(self, sentence: str, stats: dict = None, ppl: float = None, context_before: list = None, context_after: list = None, skill_rules: dict = None, engine_type: str = "local", api_key: str = "", base_url: str = "") -> dict:
         if stats is None:
