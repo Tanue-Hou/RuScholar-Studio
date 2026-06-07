@@ -70,20 +70,36 @@ claude mcp add thesis-butler python -m mcp_server.server --cwd "/Users/tanue/Doc
 
 ---
 
-## 🚀 Web UI 启动与开发
+## 🚀 Web UI 启动与运行
 
-如果您习惯使用图形化的驾驶舱进行可视化分析与参考文献管理：
+您可以选择**一键打包运行（前后端合并模式）**或**双端分离运行（开发调试模式）**：
 
-1.  **启动后端服务 (FastAPI)**：
-    ```bash
-    uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
-    ```
-2.  **启动前端 Web (Vite + TS + React)**：
-    ```bash
-    cd frontend
-    npm run dev
-    ```
-    启动后访问 Web UI。在左侧控制台，您可以配置并上传本地 `.bib` 或 `.pdf` 参考文献库，并在右侧直接对比您的学术声称与文献中的真实证据段落。
+### 1. 一键打包运行（前后端合并模式，推荐）
+当您不需要修改前端代码时，只需将前端静态资源打包，并直接启动后端。后端 FastAPI 会自动托管构建出来的静态资源，您只需访问一个端口即可使用完整系统：
+
+```bash
+# ① 构建前端静态资源包
+cd frontend
+npm run build
+cd ..
+
+# ② 启动后端服务器（自动托管前端页面）
+python backend/main.py
+```
+启动完成后，直接在浏览器中打开 **`http://localhost:8000`** 即可使用完整的 Web 驾驶舱，无需再额外开启前端开发端口。
+
+### 2. 双端分离运行（开发热更新模式）
+如果您正在开发或调试前端 UI，希望代码修改后网页能够实时热更新，请选择此模式：
+
+```bash
+# ① 启动后端 API 服务
+python backend/main.py
+
+# ② 启动前端开发调试服务（另开一个终端）
+cd frontend
+npm run dev
+```
+启动后访问控制台输出的前端开发端口（例如 `http://localhost:5173`）进行开发调试。
 
 ---
 
