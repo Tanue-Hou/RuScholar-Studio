@@ -1,40 +1,36 @@
-# RuScholar Studio
+# PhD Thesis Butler / RuScholar Studio
 
-Evidence-driven Russian academic writing diagnostics, citation auditing, and manuscript review for Web UI and MCP-based AI agents. This project grew out of the earlier PhD Thesis Butler skill and now packages the same research-writing logic as a cloneable local application.
+**Version: v5.2.0-alpha**  
+**Languages:** **English** | [中文](README_ZH.md) | [Русский](README_RU.md)
+
+Evidence-driven academic writing quality auditing for dissertations, manuscripts, and research papers. The project continues the original **PhD Thesis Butler** skill and packages it as **RuScholar Studio**: a local research-writing workbench with a Web UI and MCP tools for AI agents.
+
+The system avoids the simplistic "AI detection score" framing. Instead, it uses a traceable architecture built from a **local rule engine, local PPL probing, local/online evidence retrieval, and LLM-as-NLI citation auditing**. Results should be treated as review signals and evidence trails, not automatic misconduct verdicts.
+
+Version naming follows the source rule asset lineage: `polishing_rules_v5.json` is currently at rules version `5.1.3`; this repository adds Web UI, MCP, shared services, GitHub setup scripts, and trilingual documentation on top of that line, so the release is named `v5.2.0-alpha`.
 
 ![Web UI diagnostics](docs/assets/webui-diagnostics.png)
 
-The Web UI screenshot shows the hybrid diagnostic workflow: Russian manuscript text on the left, sentence-level highlights in the document, and discipline, perplexity, style risk, predictability risk, translationese risk, redundancy risk, and sentence reasoning on the right. Highlighted spans are review signals, not final misconduct judgments.
-
-## Features
-
-- Russian academic style diagnostics for cliches, connector overuse, passive voice, nominalization, genitive chains, and translationese.
-- Local perplexity scoring with a GGUF model and early-exit heuristics for lower latency.
-- Discipline-aware thresholds and writing rules from repository-local calibration assets.
-- Citation integrity checks for in-text citations and bibliography entries.
-- Local RAG evidence retrieval with BM25, plus optional OpenAlex-assisted evidence lookup.
-- LLM/NLI citation judge for claim-evidence entailment, contradiction, or insufficient evidence.
-- Two first-class entry points: Web UI for manual review and MCP tools for Claude, Codex, Cursor, and other agents.
-
-## Reliability Position
-
-RuScholar Studio is an audit assistant, not an automatic accusation engine.
-
-Strong signals include citation-list mismatches, missing bibliography items, retrievable evidence snippets, and agreement between rule-based style flags and PPL anomalies. Signals that require human review include low PPL as AI suspicion, high PPL as translation risk, OpenAlex abstract-only evidence, and LLM/NLI judgments. Treat every result as a risk signal with an evidence trail.
+The Web UI shows the hybrid diagnostic workflow: Russian manuscript text on the left, sentence-level highlights in the document, and discipline, average PPL, style risk, predictability risk, translationese risk, redundancy risk, and sentence reasoning on the right. Yellow and red highlights mark review candidates, not final conclusions.
 
 ## Requirements
 
-- Python 3.9 or newer.
-- Node.js 20 or newer.
-- 16GB RAM recommended for the local 4B GGUF model.
-- The default model is Qwen3-4B-Q5_K_M GGUF, around 2.7GB.
-- Apple Silicon users should prefer a Metal-enabled `llama-cpp-python`; CPU-only machines can set `THESIS_BUTLER_GPU_LAYERS=0`.
+| Item | Minimum | Recommended |
+|------|---------|-------------|
+| Python | 3.9+ | 3.10+ |
+| Node.js | 18+ | 20+ |
+| RAM | 8 GB for cloud-only mode | 16 GB for local model mode |
+| Disk | 500 MB for source and dependencies | 4 GB including the 2.7 GB GGUF model |
+| OS | macOS / Linux / Windows | macOS Apple Silicon with Metal |
+
+Apple Silicon users can use Metal acceleration. Linux and Windows users can avoid local model compilation by using `cloud-pro` or `cloud-flash`.
 
 ## Quick Start
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd ruscholar-studio
+git clone https://github.com/Tanue-Hou/RuScholar-Studio.git
+cd RuScholar-Studio
+chmod +x setup.sh
 ./setup.sh
 ```
 
@@ -44,7 +40,7 @@ Download the local model during setup:
 DOWNLOAD_MODEL=1 ./setup.sh
 ```
 
-Compile/install Metal support on Apple Silicon:
+Force Metal-enabled installation on Apple Silicon:
 
 ```bash
 INSTALL_LLAMA_METAL=1 ./setup.sh
@@ -56,77 +52,124 @@ Windows:
 .\setup.ps1
 ```
 
-## Manual Setup
+## Local Model
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m spacy download ru_core_news_sm
+To protect manuscript privacy, the local PPL probe and local NLI/style judge can use **Qwen3-4B-Q5_K_M GGUF**. The model is around 2.7 GB and defaults to:
 
-cd frontend
-npm install
-npm run build
-cd ..
+```text
+models/Qwen3-4B-Q5_K_M.gguf
 ```
 
-Download the local model:
+Manual download:
 
 ```bash
 python -c "from naturalization_layer.model_downloader import download_model; from services.shared_state import MODEL_PATH; download_model(MODEL_PATH)"
 ```
 
-## Run the Web UI
+You can also let an MCP client call `download_model_tool`. Without the local model, `local` and `hybrid` modes are unavailable, but cloud-only modes still work.
+
+## Web UI
+
+Run the bundled backend and built frontend:
 
 ```bash
 source .venv/bin/activate
 python backend/main.py
 ```
 
-Open `http://localhost:8000`. Host and port are configurable:
+Open `http://localhost:8000`.
+
+Development mode:
+
+```bash
+# Terminal 1
+python backend/main.py
+
+# Terminal 2
+cd frontend
+npm run dev
+```
+
+Override host and port:
 
 ```bash
 THESIS_BUTLER_HOST=127.0.0.1 THESIS_BUTLER_PORT=8010 python backend/main.py
 ```
 
-## MCP Server
+## MCP Integration
 
-Run the MCP server:
+The project supports **MCP (Model Context Protocol)** so Claude Code, Cursor, Claude Desktop, Codex, and other agents can call local audit tools directly.
+
+Start the MCP server:
 
 ```bash
 python -m mcp_server.server
 ```
 
-Example client configuration:
+Claude Desktop example:
 
 ```json
 {
   "mcpServers": {
-    "ruscholar-studio": {
+    "thesis-butler": {
       "command": "python",
       "args": ["-m", "mcp_server.server"],
-      "cwd": "/YOUR_CLONE_PATH/ruscholar-studio"
+      "cwd": "/YOUR_CLONE_PATH/RuScholar-Studio"
     }
   }
 }
 ```
 
+Claude Code example:
+
+```bash
+claude mcp add thesis-butler python -m mcp_server.server --cwd "/YOUR_CLONE_PATH/RuScholar-Studio"
+```
+
 Available MCP tools:
 
-- `analyze_manuscript`
-- `audit_citations`
-- `retrieve_evidence`
-- `suggest_revision`
-- `export_report`
-- `check_model_installed`
-- `download_model_tool`
-- `register_references`
-- `clear_references`
-- `list_references`
+| # | Tool | Purpose |
+|---|------|---------|
+| 1 | `analyze_manuscript` | Diagnose academic style, translationese, noun stacking, and PPL risk |
+| 2 | `audit_citations` | Cross-check in-text citations and bibliography entries |
+| 3 | `retrieve_evidence` | Retrieve evidence snippets from local references or OpenAlex |
+| 4 | `suggest_revision` | Generate context-aware academic revision suggestions |
+| 5 | `export_report` | Export Markdown or JSON audit reports |
+| 6 | `check_model_installed` | Verify local model presence and size |
+| 7 | `download_model_tool` | Download the local GGUF model |
+| 8 | `register_references` | Register BibTeX text and/or local PDF paths |
+| 9 | `clear_references` | Clear a session reference library |
+| 10 | `list_references` | List a session reference library |
+
+## Diagnostic Architecture
+
+The system uses a multi-track decision process:
+
+1. **Track A: Rule and style structure**  
+   Detects noun/verb ratio, passive constructions, genitive chains, connector overuse, academic cliches, and translationese.
+
+2. **Track B: Probabilistic signal**  
+   Computes sentence perplexity with a local GGUF model and uses early-exit heuristics to reduce inference cost.
+
+3. **Track C: Citation consistency**  
+   Checks bidirectional gaps between in-text citations and bibliography entries, with local BM25 retrieval and optional OpenAlex evidence lookup.
+
+4. **Track D: LLM/NLI evidence audit**  
+   Classifies claim-evidence relationships as entailed, contradicted, or not enough information.
+
+High-risk citation issues are surfaced first. Style and PPL anomalies trigger context-aware judge analysis. The system keeps explanations, metrics, and source snippets available for human review.
+
+## Modes
+
+| Mode | Local PPL | LLM Judge | Use Case |
+|------|-----------|-----------|----------|
+| `local` | Yes | Local Qwen | Fully offline and privacy-preserving |
+| `hybrid-pro` | Yes | DeepSeek Pro | Local probability probe plus cloud deep analysis |
+| `hybrid-flash` | Yes | DeepSeek Flash | Local probability probe plus fast cloud analysis |
+| `cloud-pro` | No | DeepSeek Pro | Cloud-only deep diagnostics |
+| `cloud-flash` | No | DeepSeek Flash | Cloud-only fast diagnostics |
 
 ## Configuration
-
-Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
@@ -138,17 +181,18 @@ Common variables:
 - `DEEPSEEK_BASE_URL`: OpenAI-compatible DeepSeek endpoint.
 - `THESIS_BUTLER_MODEL_PATH`: local GGUF model path.
 - `THESIS_BUTLER_MODEL_URL`: model download URL.
-- `THESIS_BUTLER_RULES_PATH`: repository or custom rule file path.
+- `THESIS_BUTLER_RULES_PATH`: discipline-specific writing rule path.
 - `THESIS_BUTLER_GPU_LAYERS`: `-1` for GPU offload, `0` for CPU-only.
 
-## Tests
+## Verification
 
 ```bash
 pytest -q
 cd frontend && npm run build
 ```
 
-## Repository Notes
+The test suite covers the rule engine, PPL engine, LLM judge, citation auditing, RAG/NLI, service layer, and MCP stdio integration.
 
-Model files, `.env`, `frontend/dist/`, and `node_modules/` are intentionally ignored. The repository does include `naturalization_layer/rules/polishing_rules_v5.json` and `docs/assets/webui-diagnostics.png` because they are required for out-of-the-box documentation and rule loading.
+## Contributing and License
 
+Issues and pull requests are welcome. The project is released under the MIT License.

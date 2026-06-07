@@ -1,50 +1,46 @@
-# RuScholar Studio
+# PhD Thesis Butler / RuScholar Studio
 
-证据驱动的俄语学术写作质量审计系统。项目原名和能力来源为 PhD Thesis Butler，现在扩展为同时支持 Web UI 与 MCP Agent 工具调用的本地研究写作工作台。
+**版本：v5.2.0-alpha**  
+**语言切换：** [English](README.md) | **中文** | [Русский](README_RU.md)
+
+证据驱动的学术写作质量审计系统，面向博士论文、学术手稿与科研论文。项目延续原有 **PhD Thesis Butler** skill 的算法与写作规则资产，并扩展为 **RuScholar Studio**：同时支持 Web UI、人机协同审阅和 MCP Agent 工具调用的本地研究写作工作台。
+
+本系统刻意避开传统“AI 检测率评分”的陷阱，采用 **本地规则引擎 + 本地 PPL 探针 + 本地/在线文献检索 + LLM-as-NLI Judge 证据审计** 的可追溯验证架构。系统输出应被理解为风险信号和证据链提示，而不是对 AI 代写、剽窃或学术不端的自动裁决。
+
+版本命名沿用源规则资产的迭代脉络：`polishing_rules_v5.json` 当前规则版本为 `5.1.3`，本仓库在此基础上加入 WebUI、MCP、服务层复用、GitHub 安装脚本和三语文档，因此命名为 `v5.2.0-alpha`。
 
 ![Web UI diagnostics](docs/assets/webui-diagnostics.png)
 
 Web UI 展示的是混合诊断模式：左侧为俄语论文正文与逐句风险标注，右侧为学科识别、PPL 均值、风格风险、可预测性风险、翻译腔风险、冗余风险和句级解释面板。截图中的黄色/红色高亮并不等同于“定罪”，而是提示需要进一步核查的证据链节点。
 
-## 核心能力
-
-- 俄语学术文本风格诊断：套话、连接词堆叠、被动结构、名词化、第二格链、机器翻译腔。
-- 本地 PPL 风险评估：使用 GGUF 本地模型计算困惑度，支持早期退出以降低计算成本。
-- 学科阈值校准：通过 `naturalization_layer/calibration/calibration_config.json` 与随仓库发布的 `naturalization_layer/rules/polishing_rules_v5.json` 调整判定边界。
-- 文献证据链审计：正文引用与参考文献列表双向核查，本地 RAG 检索，OpenAlex 摘要辅助核验。
-- NLI 引文逻辑审计：对 claim 与 evidence snippet 做蕴含、矛盾、证据不足判断。
-- 双入口架构：Web UI 适合人工审阅，MCP 适合 Claude、Codex、Cursor 等 Agent 调用。
-
-## 证据链可靠性判断
-
-当前证据链已经具备工程可用性，但不应被包装成自动判定论文造假或 AI 代写的最终裁决器。合理定位是“审计辅助系统”：
-
-- 可靠部分：引用完整性差集、参考文献缺失、正文标号缺失、本地 RAG 可回溯片段、PPL 与规则特征的交叉提示。
-- 需要人工复核部分：PPL 低值不必然代表 AI 生成，PPL 高值不必然代表翻译错误，OpenAlex 摘要不能替代全文证据，LLM/NLI 结论需要保留解释与原文片段。
-- GitHub 文档中应持续强调：系统输出是 risk signal 和 evidence trail，不是 misconduct verdict。
-
 ## 系统要求
 
-- Python 3.9 或更高版本。
-- Node.js 20 或更高版本，用于构建 Web UI。
-- 建议内存 16GB 以上。本地 Qwen3-4B Q5_K_M GGUF 模型约 2.7GB。
-- Apple Silicon 用户建议安装 Metal 版本 `llama-cpp-python`；无 GPU 环境可设置 `THESIS_BUTLER_GPU_LAYERS=0` 使用 CPU 回退。
+| 项目 | 最低配置 | 推荐配置 |
+|------|----------|----------|
+| Python | 3.9+ | 3.10+ |
+| Node.js | 18+ | 20+ |
+| RAM | 8 GB，适合纯云端模式 | 16 GB，本地模型模式 |
+| 磁盘空间 | 500 MB，源码与依赖 | 4 GB，含 2.7 GB GGUF 模型 |
+| 操作系统 | macOS / Linux / Windows | macOS Apple Silicon + Metal |
+
+macOS Apple Silicon 用户可使用 Metal 加速；Linux/Windows 用户如不希望编译本地模型依赖，可优先使用 `cloud-pro` 或 `cloud-flash` 模式。
 
 ## 快速开始
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
-cd ruscholar-studio
+git clone https://github.com/Tanue-Hou/RuScholar-Studio.git
+cd RuScholar-Studio
+chmod +x setup.sh
 ./setup.sh
 ```
 
-如需安装时同时下载本地模型：
+安装时同时下载本地模型：
 
 ```bash
 DOWNLOAD_MODEL=1 ./setup.sh
 ```
 
-Apple Silicon 上如需强制编译 Metal 版本：
+Apple Silicon 上强制安装 Metal 版本：
 
 ```bash
 INSTALL_LLAMA_METAL=1 ./setup.sh
@@ -56,34 +52,45 @@ Windows:
 .\setup.ps1
 ```
 
-## 手动安装
+## 本地大模型说明
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m spacy download ru_core_news_sm
+为保护研究者论文手稿隐私，系统的本地 PPL 探针与本地 NLI/风格裁判可以依赖 **Qwen3-4B-Q5_K_M GGUF** 模型。模型约 2.7 GB，默认下载到：
 
-cd frontend
-npm install
-npm run build
-cd ..
+```text
+models/Qwen3-4B-Q5_K_M.gguf
 ```
 
-下载本地模型：
+手动下载：
 
 ```bash
 python -c "from naturalization_layer.model_downloader import download_model; from services.shared_state import MODEL_PATH; download_model(MODEL_PATH)"
 ```
 
-## 启动 Web UI
+也可以通过 MCP 工具 `download_model_tool` 让 AI 客户端触发下载。如果本地没有模型，`local` 与 `hybrid` 模式不可用，但纯云端模式仍可运行。
+
+## Web UI 启动
+
+前后端合并模式：
 
 ```bash
 source .venv/bin/activate
 python backend/main.py
 ```
 
-默认地址为 `http://localhost:8000`。可通过 `.env` 或环境变量修改：
+浏览器打开 `http://localhost:8000`。
+
+开发热更新模式：
+
+```bash
+# 终端 1
+python backend/main.py
+
+# 终端 2
+cd frontend
+npm run dev
+```
+
+可通过环境变量修改后端地址：
 
 ```bash
 THESIS_BUTLER_HOST=127.0.0.1 THESIS_BUTLER_PORT=8010 python backend/main.py
@@ -91,42 +98,78 @@ THESIS_BUTLER_HOST=127.0.0.1 THESIS_BUTLER_PORT=8010 python backend/main.py
 
 ## MCP 集成
 
-MCP 模式让 Claude、Codex、Cursor、Claude Desktop 等客户端直接调用本地审计工具。
+本系统原生支持 **MCP (Model Context Protocol)**，使 Claude Code、Cursor、Claude Desktop、Codex 等 AI Agent 可以直接调用本地工具，对本地学术手稿进行离线或混合诊断。
+
+启动 MCP Server：
 
 ```bash
 python -m mcp_server.server
 ```
 
-示例配置：
+Claude Desktop 示例配置：
 
 ```json
 {
   "mcpServers": {
-    "ruscholar-studio": {
+    "thesis-butler": {
       "command": "python",
       "args": ["-m", "mcp_server.server"],
-      "cwd": "/YOUR_CLONE_PATH/ruscholar-studio"
+      "cwd": "/YOUR_CLONE_PATH/RuScholar-Studio"
     }
   }
 }
 ```
 
-当前 MCP 工具包括：
+Claude Code 示例：
 
-- `analyze_manuscript`
-- `audit_citations`
-- `retrieve_evidence`
-- `suggest_revision`
-- `export_report`
-- `check_model_installed`
-- `download_model_tool`
-- `register_references`
-- `clear_references`
-- `list_references`
+```bash
+claude mcp add thesis-butler python -m mcp_server.server --cwd "/YOUR_CLONE_PATH/RuScholar-Studio"
+```
+
+当前 MCP 工具：
+
+| # | 工具名 | 功能 |
+|---|--------|------|
+| 1 | `analyze_manuscript` | 对论文段落进行学术风格诊断，包括翻译腔、名词堆叠、PPL 风险评估 |
+| 2 | `audit_citations` | 交叉核验正文引文标号与文末参考文献一致性 |
+| 3 | `retrieve_evidence` | 通过本地文献库或 OpenAlex 检索证据片段 |
+| 4 | `suggest_revision` | 结合上下文与学科规则生成改写建议 |
+| 5 | `export_report` | 导出 Markdown 或 JSON 审计报告 |
+| 6 | `check_model_installed` | 检查本地模型是否存在及大小是否正确 |
+| 7 | `download_model_tool` | 自动下载 GGUF 本地模型 |
+| 8 | `register_references` | 注册 BibTeX 文本和/或本地 PDF 路径 |
+| 9 | `clear_references` | 清除指定会话引用库 |
+| 10 | `list_references` | 列出指定会话引用库 |
+
+## 诊断机制
+
+系统采用多轨协同诊断策略：
+
+1. **Track A：规则与风格结构轨**  
+   检测名动比、被动结构、名词第二格链、连接词堆叠、学术套话和机器翻译腔。
+
+2. **Track B：概率特征轨**  
+   使用本地 GGUF 模型计算 Perplexity，并通过早期退出机制降低本地推理成本。
+
+3. **Track C：文献一致性轨**  
+   检查正文引用与参考文献列表之间的双向缺口，支持本地 BM25 检索和 OpenAlex 摘要辅助核验。
+
+4. **Track D：LLM/NLI 证据审计轨**  
+   将论文 claim 与检索到的 snippet 进行蕴含、矛盾、证据不足三类判断。
+
+高风险文献问题优先提示；风格与 PPL 异常会触发专家模型进行上下文诊断。系统保留解释、指标与原始片段，便于人工复核。
+
+## 运行模式
+
+| 模式 | 本地 PPL | LLM 裁判 | 适用场景 |
+|------|---------|---------|---------|
+| `local` | 是 | 本地 Qwen | 完全离线，保护隐私 |
+| `hybrid-pro` | 是 | DeepSeek Pro | 本地概率探针 + 云端深度分析 |
+| `hybrid-flash` | 是 | DeepSeek Flash | 本地概率探针 + 云端快速分析 |
+| `cloud-pro` | 否 | DeepSeek Pro | 无本地模型，纯云端深度诊断 |
+| `cloud-flash` | 否 | DeepSeek Flash | 无本地模型，纯云端快速诊断 |
 
 ## 配置项
-
-复制 `.env.example` 为 `.env`，按需填写：
 
 ```bash
 cp .env.example .env
@@ -141,17 +184,15 @@ cp .env.example .env
 - `THESIS_BUTLER_RULES_PATH`：学科修辞规则路径。
 - `THESIS_BUTLER_GPU_LAYERS`：`-1` 表示尽量 GPU offload，`0` 表示 CPU-only。
 
-## 运行测试
+## 测试验证
 
 ```bash
 pytest -q
 cd frontend && npm run build
 ```
 
-## GitHub 发布前检查
+当前测试覆盖规则引擎、PPL 引擎、LLM 裁判、引文审计、RAG/NLI、服务层与 MCP stdio 集成。
 
-- 不提交 `.env`、API key、模型文件、`frontend/dist/`、`node_modules/`。
-- 保留 `naturalization_layer/rules/polishing_rules_v5.json`，它是项目级规则资源。
-- 保留 `docs/assets/webui-diagnostics.png`，README 依赖该图展示 Web UI。
-- README 中使用 `/YOUR_CLONE_PATH/...` 占位符，不写作者本机路径。
+## 贡献与许可
 
+欢迎提交 Issue 和 Pull Request。项目以 MIT License 开源。
