@@ -39,7 +39,12 @@ def get_engines(engine_type: str):
                 judge = StyleJudge(engine_inst.llm)
             judge_inst = judge
         else:
-            raise ValueError(f"Local model not found at {MODEL_PATH}. Please download it first or use hybrid/cloud modes.")
+            raise ValueError(
+                f"Local model not found at '{MODEL_PATH}'. "
+                f"To resolve this, you can call the MCP tool 'download_model_tool' to download it automatically, "
+                f"or run the following command in your terminal to download manually: "
+                f"python -c \"from naturalization_layer.model_downloader import download_model, MODEL_PATH; download_model(MODEL_PATH)\""
+            )
     else:
         judge_inst = StyleJudge(None)
 
@@ -313,6 +318,70 @@ def export_report(
         format: Export format: 'markdown' or 'json'.
     """
     return export_report_data(diagnostics, citations, format)
+
+@mcp.tool()
+def check_model_installed() -> dict:
+    """
+    Check if the local Qwen GGUF model is installed and matches the expected file size.
+    
+    Returns:
+        A dictionary containing:
+        - installed (bool): Whether the model is present and correct.
+        - model_path (str): File path to the model.
+        - size_bytes (int): Current size of the file.
+        - expected_size_bytes (int): Expected size of the file.
+        - message (str): Friendly message describing the status.
+    """
+    from naturalization_layer.model_downloader import EXPECTED_SIZE
+    if os.path.exists(MODEL_PATH):
+        size = os.path.getsize(MODEL_PATH)
+        if size == EXPECTED_SIZE:
+            return {
+                "installed": True,
+                "model_path": MODEL_PATH,
+                "size_bytes": size,
+                "expected_size_bytes": EXPECTED_SIZE,
+                "message": "Local model is installed and verified."
+            }
+        else:
+            return {
+                "installed": False,
+                "model_path": MODEL_PATH,
+                "size_bytes": size,
+                "expected_size_bytes": EXPECTED_SIZE,
+                "message": f"Local model file exists but has incorrect size ({size} bytes, expected {EXPECTED_SIZE} bytes)."
+            }
+    return {
+        "installed": False,
+        "model_path": MODEL_PATH,
+        "size_bytes": 0,
+        "expected_size_bytes": EXPECTED_SIZE,
+        "message": f"Local model not found at '{MODEL_PATH}'. Please call 'download_model_tool' to download it."
+    }
+
+@mcp.tool()
+async def download_model_tool() -> dict:
+    """
+    Automatically download the Qwen GGUF model (approx. 2.7 GB) from ModelScope to enable offline diagnostics.
+    This tool saves the model to the local 'models/' directory.
+    
+    Returns:
+        A dictionary indicating the download status, message, and path.
+    """
+    from naturalization_layer.model_downloader import download_model
+    try:
+        # Run synchronous downloader in a separate thread to avoid blocking the event loop
+        await asyncio.to_thread(download_model, MODEL_PATH)
+        return {
+            "status": "success",
+            "model_path": MODEL_PATH,
+            "message": "Model downloaded successfully! You can now use local engine_type for offline diagnostics."
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to download model: {str(e)}"
+        }
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")

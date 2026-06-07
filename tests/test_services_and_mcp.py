@@ -200,6 +200,64 @@ def test_mcp_stdio_jsonrpc():
         assert "retrieve_evidence" in tool_names
         assert "suggest_revision" in tool_names
         assert "export_report" in tool_names
+        assert "check_model_installed" in tool_names
+        assert "download_model_tool" in tool_names
     finally:
         proc.terminate()
         proc.wait()
+
+def test_mcp_check_model_installed():
+    from mcp_server.server import check_model_installed
+    from naturalization_layer.model_downloader import EXPECTED_SIZE
+    
+    # Case 1: Model does not exist
+    with patch("os.path.exists", return_value=False):
+        res = check_model_installed()
+        assert res["installed"] is False
+        assert res["size_bytes"] == 0
+        assert "Please call 'download_model_tool'" in res["message"]
+        
+    # Case 2: Model exists but size is incorrect
+    with patch("os.path.exists", return_value=True), patch("os.path.getsize", return_value=12345):
+        res = check_model_installed()
+        assert res["installed"] is False
+        assert res["size_bytes"] == 12345
+        assert "incorrect size" in res["message"]
+        
+    # Case 3: Model exists and size is correct
+    with patch("os.path.exists", return_value=True), patch("os.path.getsize", return_value=EXPECTED_SIZE):
+        res = check_model_installed()
+        assert res["installed"] is True
+        assert res["size_bytes"] == EXPECTED_SIZE
+        assert "installed and verified" in res["message"]
+
+def test_mcp_download_model_tool():
+    import asyncio
+    from mcp_server.server import download_model_tool
+    
+    async def run_success():
+        with patch("naturalization_layer.model_downloader.download_model") as mock_download:
+            res = await download_model_tool()
+            assert res["status"] == "success"
+            assert "successfully" in res["message"]
+            mock_download.assert_called_once()
+            
+    async def run_error():
+        with patch("naturalization_layer.model_downloader.download_model", side_effect=Exception("Connection timed out")):
+            res = await download_model_tool()
+            assert res["status"] == "error"
+            assert "Connection timed out" in res["message"]
+            
+    asyncio.run(run_success())
+    asyncio.run(run_error())
+
+def test_mcp_get_engines_missing_model_error_message():
+    from mcp_server.server import get_engines
+    
+    with patch("os.path.exists", return_value=False):
+        with pytest.raises(ValueError) as exc_info:
+            get_engines("local")
+        error_msg = str(exc_info.value)
+        assert "Local model not found" in error_msg
+        assert "download_model_tool" in error_msg
+        assert "python -c" in error_msg
