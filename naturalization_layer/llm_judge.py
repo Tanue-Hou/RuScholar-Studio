@@ -159,8 +159,38 @@ You must return a JSON object containing exactly one key "discipline" with the c
         
         think_content, cleaned_text = self._clean_json_text(raw_text)
         
+        parsed_success = False
+        res = {}
+        parse_err = None
+        
         try:
             res = json.loads(cleaned_text)
+            parsed_success = True
+        except Exception as json_err:
+            parse_err = json_err
+            # Try ast.literal_eval for single-quoted Python dict style formats
+            try:
+                import ast
+                res = ast.literal_eval(cleaned_text)
+                parsed_success = True
+            except Exception as ast_err:
+                parse_err = ast_err
+                # Attempt to repair unclosed braces/brackets (common on token limit cuts)
+                try:
+                    import ast
+                    repaired_text = cleaned_text.strip()
+                    open_braces = repaired_text.count("{") - repaired_text.count("}")
+                    open_brackets = repaired_text.count("[") - repaired_text.count("]")
+                    if open_brackets > 0:
+                        repaired_text += "]" * open_brackets
+                    if open_braces > 0:
+                        repaired_text += "}" * open_braces
+                    res = ast.literal_eval(repaired_text)
+                    parsed_success = True
+                except Exception:
+                    pass
+
+        if parsed_success:
             res["think"] = think_content
             if "estimated_perplexity" in res:
                 try:
@@ -170,22 +200,22 @@ You must return a JSON object containing exactly one key "discipline" with the c
             else:
                 res["estimated_perplexity"] = None
             return res
-        except Exception as parse_err:
-            friendly_think = think_content if think_content else "【模型输出解析失败】模型未返回可识别的思维链，或者输出格式损坏。"
-            return {
-                "issues": [{
-                    "issue_type": "json_parse_error",
-                    "severity": "high",
-                    "evidence": "LLM Format Defect",
-                    "explanation_zh": f"模型返回的学术写作风格诊断格式损坏，无法解析（原始输出摘要：{cleaned_text[:100]}...）。该句已被安全放行，请继续阅读其他句子。",
-                    "explanation_ru": "Формат ответа модели поврежден и не может быть обработан.",
-                    "rewrite_suggestion": "-"
-                }],
-                "think": friendly_think,
-                "error": f"Failed to parse JSON: {str(parse_err)}",
-                "raw": raw_text,
-                "safe_to_rewrite": False
-            }
+            
+        friendly_think = think_content if think_content else "【模型输出解析失败】模型未返回可识别的思维链，或者输出格式损坏。"
+        return {
+            "issues": [{
+                "issue_type": "json_parse_error",
+                "severity": "high",
+                "evidence": "LLM Format Defect",
+                "explanation_zh": f"模型返回的学术写作风格诊断格式损坏，无法解析（原始输出摘要：{cleaned_text[:100]}...）。该句已被安全放行，请继续阅读其他句子。",
+                "explanation_ru": "Формат ответа модели поврежден и не может быть обработан.",
+                "rewrite_suggestion": "-"
+            }],
+            "think": friendly_think,
+            "error": f"Failed to parse JSON: {str(parse_err)}",
+            "raw": raw_text,
+            "safe_to_rewrite": False
+        }
             
     def _call_deepseek_api(self, model: str, api_key: str, base_url: str, sys_prompt: str, user_prompt: str) -> str:
         import urllib.request
