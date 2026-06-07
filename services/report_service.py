@@ -38,16 +38,17 @@ def generate_markdown_report(diagnostics: list[dict], citations: list[dict] = No
     md.append("| :--- | :---: | :---: | :--- |")
     
     def get_risk_status(val: float) -> str:
-        if val >= 0.7:
+        if val >= 70.0:
             return "🔴 高风险"
-        elif val >= 0.4:
+        elif val >= 40.0:
             return "🟡 中风险"
         return "🟢 低风险"
         
-    md.append(f"| **学术预测度风险 (Predictability Risk)** | {overall_risks['predictability_risk'] * 100:.1f}% | {get_risk_status(overall_risks['predictability_risk'])} | 表征文本学术表意特征的异常流畅度（低 PPL 集中度），用于初步筛查潜在的 AI 代写与公式化套话风险。 |")
-    md.append(f"| **行文均匀度风险 (Uniformity Risk)** | {overall_risks['uniformity_risk'] * 100:.1f}% | {get_risk_status(overall_risks['uniformity_risk'])} | 指示文本句子长度或句式结构的多样性缺乏度，极高值反映机器生成典型的千篇一律特征。 |")
-    md.append(f"| **机器翻译腔风险 (Translationese Risk)** | {overall_risks['translationese_risk'] * 100:.1f}% | {get_risk_status(overall_risks['translationese_risk'])} | 检测俄文学术写作中常见的英语直译、被动语态泛滥及第二格名词链叠加倾向。 |")
-    md.append(f"| **冗余修饰风险 (Redundancy Risk)** | {overall_risks['redundancy_risk'] * 100:.1f}% | {get_risk_status(overall_risks['redundancy_risk'])} | 统计文本中高频学术虚词、无实意连接词及套话填充词比例，表征句式是否精炼简洁。 |")
+    md.append(f"| **学术预测度风险 (Predictability Risk)** | {overall_risks['predictability_risk']:.1f}% | {get_risk_status(overall_risks['predictability_risk'])} | 表征文本学术表意特征的异常流畅度（低 PPL 集中度），用于初步筛查潜在 di AI 代写与公式化套话风险。 |")
+    md.append(f"| **行文均匀度风险 (Uniformity Risk)** | {overall_risks['uniformity_risk']:.1f}% | {get_risk_status(overall_risks['uniformity_risk'])} | 指示文本句子长度或句式结构的多样性缺乏度，极高值反映机器生成典型的千篇一律特征。 |")
+    md.append(f"| **机器翻译腔风险 (Translationese Risk)** | {overall_risks['translationese_risk']:.1f}% | {get_risk_status(overall_risks['translationese_risk'])} | 检测俄文学术写作中常见的英语直译、被动语态泛滥及第二格名词链叠加倾向。 |")
+    md.append(f"| **冗余修饰风险 (Redundancy Risk)** | {overall_risks['redundancy_risk']:.1f}% | {get_risk_status(overall_risks['redundancy_risk'])} | 统计文本中高频学术虚词、无实意连接词及套话填充词比例，表征句式是否精炼简洁。 |")
+
     
     # Section: Global Citation Integrity
     if global_warnings:

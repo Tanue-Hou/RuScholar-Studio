@@ -1,6 +1,74 @@
 from llama_cpp import Llama
 import json
 
+def repair_json_string(json_str: str) -> str:
+    # First, trim whitespace
+    json_str = json_str.strip()
+    if not json_str:
+        return "{}"
+        
+    in_string = False
+    escape_next = False
+    stack = []
+    result = []
+    
+    for char in json_str:
+        if escape_next:
+            result.append(char)
+            escape_next = False
+            continue
+            
+        if char == '\\':
+            escape_next = True
+            result.append(char)
+        elif char == '"':
+            in_string = not in_string
+            result.append(char)
+        elif char == '\n' and in_string:
+            result.append('\\n')
+        elif char == '\r' and in_string:
+            result.append('\\r')
+        elif not in_string:
+            if char == '{':
+                stack.append('}')
+                result.append(char)
+            elif char == '[':
+                stack.append(']')
+                result.append(char)
+            elif char == '}':
+                if stack and stack[-1] == '}':
+                    stack.pop()
+                temp_str = "".join(result).rstrip()
+                if temp_str.endswith(','):
+                    result = list(temp_str[:-1])
+                result.append(char)
+            elif char == ']':
+                if stack and stack[-1] == ']':
+                    stack.pop()
+                temp_str = "".join(result).rstrip()
+                if temp_str.endswith(','):
+                    result = list(temp_str[:-1])
+                result.append(char)
+            else:
+                result.append(char)
+        else:
+            result.append(char)
+            
+    # If we ended inside a string, close it
+    if in_string:
+        result.append('"')
+        
+    # Remove trailing commas before closing braces/brackets
+    temp_str = "".join(result).rstrip()
+    if temp_str.endswith(','):
+        result = list(temp_str[:-1])
+        
+    # Close any remaining open braces/brackets in reverse order
+    while stack:
+        result.append(stack.pop())
+        
+    return "".join(result)
+
 class StyleJudge:
     def __init__(self, llm_instance: Llama):
         self.llm = llm_instance
@@ -105,7 +173,7 @@ You must return a JSON object containing exactly one key "discipline" with the c
 3. Обязательно укажи конкретную фразу-доказательство (evidence) и объясни причину на русском (explanation_ru) и китайском (explanation_zh) языках. В объяснении обязательно явно сошлись на соответствующее правило (или нарушение правила) из предоставленной базы ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ (PhD Thesis Butler) или лингвистический критерий (например, отношение существительных к глаголам, пассивный залог), если оно применимо к данной ошибке. Объяснение на китайском языке (explanation_zh) должно быть ясным, подробным и информативным.
 4. Предложи зрелый академический вариант переписывания (rewrite_suggestion). При переписывании обязательно опирайся на ОБЯЗАТЕЛЬНЫЕ ПРАВИЛА РЕДАКТУРЫ, лингвистические предупреждения и Контекст!
 6. В ключе "estimated_perplexity" обязательно укажи численную оценку perplexity предложения (дробное число от 5.0 до 150.0): от 10.0 до 15.0 для гладкого/шаблонного/подозреваемого в ИИ-генерации текста; от 30.0 до 50.0 для естественного академического текста человека; более 80.0 для тяжелого/перегруженного перевода.
-7. ВНИМАНИЕ: ОБЯЗАТЕЛЬНО пиши все свои размышления внутри тега <think> (если ты используешь или поддерживаешь его) исключительно на китайском языке (中文/zh-CN). Ни в коем случае не пиши размышления на русском или английском языках. Размышления могут быть подробными. Итоговое объяснение в JSON (explanation_zh) должно быть ясным и информативным.
+7. ВНИМАНИЕ: ОБЯЗАТЕЛЬНО пиши все свои размышления внутри тега <think> (если ты используешь или поддерживаешь его) исключительно на китайском языке (中文/zh-CN). Ни в коем случае не пиши размышления на русском или английском языках. Размышления должны быть краткими (до 100 слов). Итоговое объяснение в JSON (explanation_zh) должно быть ясным и информативным.
 
 Ответь СТРОГО в формате JSON:
 {{
@@ -129,7 +197,7 @@ You must return a JSON object containing exactly one key "discipline" with the c
                 raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, context_str)
             else:
                 # Fallback to local
-                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). Keep your reasoning extremely concise (under 200 words) and focused. Write the final explanation_zh inside the JSON object clearly and informatively.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
+                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). Keep your reasoning extremely concise (under 100 words) and focused. Write the final JSON object clearly.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n<think>\n"
                 response = self.llm(prompt, max_tokens=1024, stop=["<|im_end|>"])
                 raw_text = response["choices"][0]["text"].strip()
         except Exception as api_err:
@@ -163,32 +231,31 @@ You must return a JSON object containing exactly one key "discipline" with the c
         res = {}
         parse_err = None
         
+        # 1. First, try normal json.loads
         try:
             res = json.loads(cleaned_text)
             parsed_success = True
         except Exception as json_err:
             parse_err = json_err
-            # Try ast.literal_eval for single-quoted Python dict style formats
+            
+        # 2. If it fails, run the repairer and try json.loads again
+        if not parsed_success:
+            try:
+                repaired_text = repair_json_string(cleaned_text)
+                res = json.loads(repaired_text)
+                parsed_success = True
+            except Exception as repair_err:
+                parse_err = repair_err
+                
+        # 3. If it still fails, try ast.literal_eval on the repaired text
+        if not parsed_success:
             try:
                 import ast
-                res = ast.literal_eval(cleaned_text)
+                repaired_text = repair_json_string(cleaned_text)
+                res = ast.literal_eval(repaired_text)
                 parsed_success = True
             except Exception as ast_err:
                 parse_err = ast_err
-                # Attempt to repair unclosed braces/brackets (common on token limit cuts)
-                try:
-                    import ast
-                    repaired_text = cleaned_text.strip()
-                    open_braces = repaired_text.count("{") - repaired_text.count("}")
-                    open_brackets = repaired_text.count("[") - repaired_text.count("]")
-                    if open_brackets > 0:
-                        repaired_text += "]" * open_brackets
-                    if open_braces > 0:
-                        repaired_text += "}" * open_braces
-                    res = ast.literal_eval(repaired_text)
-                    parsed_success = True
-                except Exception:
-                    pass
 
         if parsed_success:
             res["think"] = think_content
@@ -272,6 +339,10 @@ You must return a JSON object containing exactly one key "discipline" with the c
                 else:
                     think_content = parts[0][7:].strip()
                     text = parts[1].strip()
+            elif "</think>" in text:
+                parts = text.split("</think>", 1)
+                think_content = parts[0].strip()
+                text = parts[1].strip()
 
         if text.startswith("```"):
             lines = text.split("\n")

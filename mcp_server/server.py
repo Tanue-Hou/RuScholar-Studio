@@ -15,7 +15,7 @@ from naturalization_layer.rules_engine import analyze_text_rules
 # Import FastMCP
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("PhD Thesis Butler MCP Server")
+mcp = FastMCP("RuScholar Studio MCP Server")
 
 # Lazily initialized model instances
 engine = None
@@ -57,14 +57,35 @@ def get_engines(engine_type: str):
 
     return engine_inst, judge_inst, citation_judge
 
+from enum import Enum
+
+class EngineType(str, Enum):
+    local = "local"
+    hybrid_pro = "hybrid-pro"
+    hybrid_flash = "hybrid-flash"
+    cloud_pro = "cloud-pro"
+    cloud_flash = "cloud-flash"
+
+class Discipline(str, Enum):
+    sci_tech = "SCI_TECH"
+    automation_control = "AUTOMATION_CONTROL"
+    agri_med = "AGRI_MED"
+    hum_pol_econ = "HUM_POL_ECON"
+    arts_sports = "ARTS_SPORTS"
+    universal = "UNIVERSAL"
+
+class ReportFormat(str, Enum):
+    markdown = "markdown"
+    json = "json"
+
 @mcp.tool()
 async def analyze_manuscript(
     text: str,
     session_id: str = "mcp_session",
-    engine_type: str = "local",
+    engine_type: EngineType = EngineType.local,
     api_key: str = "",
     base_url: str = "",
-    discipline: str = None
+    discipline: Discipline = None
 ) -> list[dict]:
     """
     Analyze manuscript text for style issues, formula markings, translationese, and predictability.
@@ -75,34 +96,37 @@ async def analyze_manuscript(
         engine_type: Mode to run diagnostics: 'local' (offline), 'hybrid-pro', 'hybrid-flash', 'cloud-pro', 'cloud-flash'.
         api_key: Remote LLM API Key (if using hybrid or cloud mode).
         base_url: Remote LLM API base URL.
-        discipline: Optional academic discipline (e.g. AUTOMATION_CONTROL, AGRI_MED, SCI_TECH, HUM_POL_ECON). If not provided, it will be auto-detected.
+        discipline: Academic discipline. If not provided, it will be auto-detected.
     """
+    engine_type_str = engine_type.value if hasattr(engine_type, 'value') else engine_type
+    discipline_str = discipline.value if discipline and hasattr(discipline, 'value') else discipline
+    
     # Initialize engines
-    engine_inst, judge_inst, cit_judge = get_engines(engine_type)
+    engine_inst, judge_inst, cit_judge = get_engines(engine_type_str)
     
     # 1. Resolve discipline
-    if not discipline or discipline == "UNIVERSAL":
+    if not discipline_str or discipline_str == "UNIVERSAL":
         use_cloud = bool(api_key and api_key.strip())
-        actual_engine = ("deepseek-v4-flash" if "flash" in engine_type else "deepseek-v4-pro") if use_cloud else "local"
+        actual_engine = ("deepseek-v4-flash" if "flash" in engine_type_str else "deepseek-v4-pro") if use_cloud else "local"
         
         try:
             if actual_engine == "local" and not engine_inst:
-                discipline = "UNIVERSAL"
+                discipline_str = "UNIVERSAL"
             else:
-                discipline = await asyncio.to_thread(
+                discipline_str = await asyncio.to_thread(
                     judge_inst.detect_discipline, text, actual_engine, api_key, base_url
                 )
         except Exception:
-            discipline = "UNIVERSAL"
+            discipline_str = "UNIVERSAL"
 
     # 2. Run diagnostics
     results = await run_sentence_diagnose_batch(
         text=text,
         session_id=session_id,
-        engine_type=engine_type,
+        engine_type=engine_type_str,
         api_key=api_key,
         base_url=base_url,
-        discipline=discipline,
+        discipline=discipline_str,
         engine_inst=engine_inst,
         judge_inst=judge_inst,
         citation_judge=cit_judge
@@ -113,7 +137,7 @@ async def analyze_manuscript(
 async def audit_citations(
     text: str,
     session_id: str = "mcp_session",
-    engine_type: str = "local",
+    engine_type: EngineType = EngineType.local,
     api_key: str = "",
     base_url: str = ""
 ) -> dict:
@@ -124,10 +148,12 @@ async def audit_citations(
     Args:
         text: Manuscript text containing references list at the end.
         session_id: Session identifier.
-        engine_type: Inference mode.
+        engine_type: Inference mode: 'local' (offline), 'hybrid-pro', 'hybrid-flash', 'cloud-pro', 'cloud-flash'.
         api_key: Remote API Key.
         base_url: Remote base URL.
     """
+    engine_type_str = engine_type.value if hasattr(engine_type, 'value') else engine_type
+    
     # 1. Global consistency check
     integrity_report = check_citation_integrity(text)
     
@@ -143,7 +169,7 @@ async def audit_citations(
     session_references[session_id]["bib_mapping"] = extract_bibliography_mapping(text)
     
     # 3. Retrieve engine for citation NLI verification
-    engine_inst, judge_inst, cit_judge = get_engines(engine_type)
+    engine_inst, judge_inst, cit_judge = get_engines(engine_type_str)
     
     # 4. Perform sentence-level citation audits
     from naturalization_layer.rules_engine import analyze_text_rules
@@ -153,7 +179,7 @@ async def audit_citations(
     all_sentence_audits = []
     for s in sentences:
         audits = await perform_nli_citation_audit(
-            s, session_id, engine_type, api_key, base_url, cit_judge
+            s, session_id, engine_type_str, api_key, base_url, cit_judge
         )
         if audits:
             all_sentence_audits.append({
@@ -241,10 +267,10 @@ async def retrieve_evidence(
 @mcp.tool()
 async def suggest_revision(
     sentence: str,
-    discipline: str,
+    discipline: Discipline,
     context_before: str = "",
     context_after: str = "",
-    engine_type: str = "local",
+    engine_type: EngineType = EngineType.local,
     api_key: str = "",
     base_url: str = ""
 ) -> dict:
@@ -253,20 +279,23 @@ async def suggest_revision(
     
     Args:
         sentence: The draft sentence to refine.
-        discipline: Discipline category (e.g. AUTOMATION_CONTROL, AGRI_MED, SCI_TECH, HUM_POL_ECON).
+        discipline: Academic discipline.
         context_before: Surrounding preceding text (optional).
         context_after: Surrounding succeeding text (optional).
         engine_type: Local or cloud engine type.
         api_key: API key.
         base_url: Base URL.
     """
-    engine_inst, judge_inst, cit_judge = get_engines(engine_type)
+    engine_type_str = engine_type.value if hasattr(engine_type, 'value') else engine_type
+    discipline_str = discipline.value if hasattr(discipline, 'value') else discipline
+    
+    engine_inst, judge_inst, cit_judge = get_engines(engine_type_str)
     
     # Analyze text rules to find any Track A triggers
     rules_res = analyze_text_rules(sentence)
     diag_rules = rules_res["sentence_diagnostics"][0] if rules_res["sentence_diagnostics"] else {}
     
-    active_rules = get_discipline_rules(discipline)
+    active_rules = get_discipline_rules(discipline_str)
     
     diag = await asyncio.to_thread(
         judge_inst.diagnose_sentence,
@@ -276,7 +305,7 @@ async def suggest_revision(
         context_before=[context_before] if context_before else [],
         context_after=[context_after] if context_after else [],
         skill_rules=active_rules,
-        engine_type=engine_type,
+        engine_type=engine_type_str,
         api_key=api_key,
         base_url=base_url
     )
@@ -307,7 +336,7 @@ async def suggest_revision(
 def export_report(
     diagnostics: list[dict],
     citations: list[dict] = None,
-    format: str = "markdown"
+    format: ReportFormat = ReportFormat.markdown
 ) -> str:
     """
     Export structural diagnostics and citation audit results as a beautiful report.
@@ -317,7 +346,8 @@ def export_report(
         citations: List of citation audit results.
         format: Export format: 'markdown' or 'json'.
     """
-    return export_report_data(diagnostics, citations, format)
+    format_str = format.value if hasattr(format, 'value') else format
+    return export_report_data(diagnostics, citations, format_str)
 
 @mcp.tool()
 def check_model_installed() -> dict:
@@ -383,5 +413,134 @@ async def download_model_tool() -> dict:
             "message": f"Failed to download model: {str(e)}"
         }
 
+@mcp.tool()
+async def register_references(
+    session_id: str,
+    bibtex_text: str = "",
+    pdf_paths: list[str] = None
+) -> dict:
+    """
+    Register BibTeX text and/or local PDF paths to a session's reference library for citation auditing.
+    
+    Args:
+        session_id: Session identifier to bind the references to.
+        bibtex_text: Bibliography database entries in BibTeX format.
+        pdf_paths: List of absolute file paths to PDF papers.
+    """
+    from naturalization_layer.rag_retriever import parse_bibtex, chunk_text, BM25Retriever
+    import re
+    
+    if session_id not in session_references:
+        session_references[session_id] = {
+            "bibtex": {},
+            "corpus": {},
+            "retrievers": {},
+            "online_cache": {},
+            "bib_mapping": {}
+        }
+        
+    bib_keys_added = []
+    pdf_keys_added = []
+    
+    if bibtex_text and bibtex_text.strip():
+        try:
+            bib_entries = parse_bibtex(bibtex_text)
+            session_references[session_id]["bibtex"].update(bib_entries)
+            bib_keys_added = list(bib_entries.keys())
+        except Exception as e:
+            raise ValueError(f"Failed to parse BibTeX: {str(e)}")
+            
+    if pdf_paths:
+        for path in pdf_paths:
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"PDF file not found at path: {path}")
+            filename = os.path.basename(path)
+            name_part, ext = os.path.splitext(filename)
+            clean_name = re.sub(r'[\[\]]', '', name_part).strip().lower()
+            
+            try:
+                with open(path, "rb") as f:
+                    contents = f.read()
+            except Exception as e:
+                raise IOError(f"Failed to read file {path}: {str(e)}")
+                
+            text = ""
+            if ext.lower() == ".pdf":
+                try:
+                    from pypdf import PdfReader
+                    import io
+                    reader = PdfReader(io.BytesIO(contents))
+                    text = ""
+                    for page in reader.pages:
+                        t = page.extract_text()
+                        if t:
+                            text += t + "\n"
+                except Exception as e:
+                    raise IOError(f"Failed to parse PDF {filename}: {str(e)}")
+            else:
+                try:
+                    text = contents.decode("utf-8")
+                except Exception as e:
+                    raise IOError(f"Failed to decode text file {filename}: {str(e)}")
+                    
+            if text.strip():
+                chunks = chunk_text(text)
+                corpus_entries = []
+                for idx, chunk in enumerate(chunks):
+                    corpus_entries.append({
+                        "text": chunk,
+                        "metadata": {
+                            "filename": filename,
+                            "key": clean_name,
+                            "chunk_index": idx
+                        }
+                    })
+                session_references[session_id]["corpus"][clean_name] = corpus_entries
+                session_references[session_id]["retrievers"][clean_name] = BM25Retriever(corpus_entries)
+                pdf_keys_added.append(clean_name)
+                
+    return {
+        "status": "success",
+        "bibtex_keys_added": bib_keys_added,
+        "pdf_keys_added": pdf_keys_added,
+        "total_bibtex_keys": list(session_references[session_id]["bibtex"].keys()),
+        "total_pdf_keys": list(session_references[session_id]["retrievers"].keys())
+    }
+
+@mcp.tool()
+def clear_references(session_id: str) -> dict:
+    """
+    Clear all registered references (BibTeX and PDFs) for the given session.
+    
+    Args:
+        session_id: Session identifier to clear.
+    """
+    if session_id in session_references:
+        session_references[session_id] = {
+            "bibtex": {},
+            "corpus": {},
+            "retrievers": {},
+            "online_cache": {},
+            "bib_mapping": {}
+        }
+        return {"status": "success", "message": f"References for session '{session_id}' cleared."}
+    return {"status": "success", "message": f"Session '{session_id}' was not initialized or already empty."}
+
+@mcp.tool()
+def list_references(session_id: str) -> dict:
+    """
+    List all currently registered BibTeX keys and PDF keys for the given session.
+    
+    Args:
+        session_id: Session identifier.
+    """
+    session_ref = session_references.get(session_id, {})
+    return {
+        "session_id": session_id,
+        "bibtex_keys": list(session_ref.get("bibtex", {}).keys()),
+        "pdf_keys": list(session_ref.get("retrievers", {}).keys())
+    }
+
 if __name__ == "__main__":
     mcp.run(transport="stdio")
+

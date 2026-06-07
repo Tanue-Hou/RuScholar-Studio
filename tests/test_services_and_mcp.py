@@ -32,10 +32,10 @@ def test_report_generation():
                 "nv_ratio": 5.0,
                 "passive_count": 1
             },
-            "predictability_risk": 0.8,
-            "uniformity_risk": 0.5,
-            "translationese_risk": 0.9,
-            "redundancy_risk": 0.4
+            "predictability_risk": 80.0,
+            "uniformity_risk": 50.0,
+            "translationese_risk": 90.0,
+            "redundancy_risk": 40.0
         }
     ]
     
@@ -45,7 +45,7 @@ def test_report_generation():
     assert "Это тестовое предложение" in report_md
     assert "ИИ-шаблоны" in report_md
     assert "8.5" in report_md
-    assert "80.0%" in report_md # predictability risk 0.8 -> 80%
+    assert "80.0%" in report_md # predictability risk 80.0 -> 80%
 
     # Test JSON Export
     report_json_str = export_report_data(diagnostics, format_type="json")
@@ -261,3 +261,152 @@ def test_mcp_get_engines_missing_model_error_message():
         assert "Local model not found" in error_msg
         assert "download_model_tool" in error_msg
         assert "python -c" in error_msg
+
+def test_ppl_veto_logic():
+    import asyncio
+    from services.diagnostic_service import run_sentence_diagnose_batch
+    
+    # Mock engine_inst to return ppl=7.5 (which is < ppl_low 15.0)
+    mock_engine = MagicMock()
+    mock_engine.evaluate_sentence_ppl.return_value = (7.5, False)
+    
+    # Mock judge_inst to return empty issues (i.e. Passed)
+    mock_judge = MagicMock()
+    mock_judge.diagnose_sentence.return_value = {
+        "think": "LLM thinks this sentence is normal",
+        "issues": []
+    }
+    
+    async def run():
+        results = await run_sentence_diagnose_batch(
+            text="В данной работе рассматривается оценка коэффициента сцепления.",
+            session_id="test_veto_session",
+            engine_type="local",
+            api_key="",
+            base_url="",
+            discipline="UNIVERSAL",
+            engine_inst=mock_engine,
+            judge_inst=mock_judge,
+            citation_judge=None
+        )
+        # Should be flagged because PPL is 7.5 < 15.0
+        assert len(results) == 1
+        res = results[0]
+        assert res["status"] == "flagged"
+        assert res["issue_type"] == "ai_generated_suspicion"
+        assert "物理困惑度极低" in res["explanation"]
+        assert "7.5" in res["explanation"]
+        
+    asyncio.run(run())
+
+def test_mcp_e2e_references_flow():
+    import asyncio
+    import tempfile
+    import os
+    import shutil
+    from mcp_server.server import register_references, audit_citations, export_report, clear_references, list_references
+    from mcp_server.server import EngineType, ReportFormat
+    
+    # 1. Create a temporary folder and a text file named smith2020.txt
+    tmp_dir = tempfile.mkdtemp()
+    tmp_path = os.path.join(tmp_dir, "smith2020.txt")
+    with open(tmp_path, "wb") as f:
+        f.write(b"Deep learning model for navigation has high efficiency and robustness.")
+        
+    try:
+        session_id = "test_mcp_e2e_session"
+        bibtex = """
+        @article{smith2020,
+            title={Deep Learning Model},
+            author={Smith, J.},
+            year={2020}
+        }
+        """
+        
+        # 2. Register references (BibTeX and local file)
+        async def run_register():
+            res = await register_references(
+                session_id=session_id,
+                bibtex_text=bibtex,
+                pdf_paths=[tmp_path]
+            )
+            assert res["status"] == "success"
+            assert "smith2020" in res["bibtex_keys_added"]
+            assert "smith2020" in res["pdf_keys_added"]
+            
+            # List references
+            list_res = list_references(session_id)
+            assert "smith2020" in list_res["bibtex_keys"]
+            assert "smith2020" in list_res["pdf_keys"]
+            
+        asyncio.run(run_register())
+        
+        # 3. Perform citation audit on a text that cites [smith2020]
+        # We mock get_engines to avoid loading the real model if not needed
+        with patch("mcp_server.server.get_engines") as mock_get_engines:
+            mock_engine = MagicMock()
+            mock_judge = MagicMock()
+            mock_cit_judge = MagicMock()
+            mock_get_engines.return_value = (mock_engine, mock_judge, mock_cit_judge)
+            
+            # Mock NLI verification to support the claim
+            mock_cit_judge.verify_citation.return_value = {
+                "think": "NLI support match",
+                "status": "SUPPORTED",
+                "explanation_zh": "证据完全支持主张",
+                "evidence_snippet": "has high efficiency and robustness"
+            }
+            
+            text_to_audit = f"Это тестовое предложение. [smith2020] говорит о высокой эффективности.\n\nСписок литературы:\n[smith2020] Smith, J. Deep Learning Model. 2020."
+            
+            async def run_audit():
+                audit_res = await audit_citations(
+                    text=text_to_audit,
+                    session_id=session_id,
+                    engine_type=EngineType.local
+                )
+                assert len(audit_res["integrity_warnings"]) == 0
+                assert len(audit_res["sentence_citation_audits"]) > 0
+                
+                # Check NLI results
+                audits = audit_res["sentence_citation_audits"][0]["audits"]
+                assert audits[0]["status"] == "SUPPORTED"
+                assert audits[0]["key"] == "smith2020"
+                
+                # 4. Export report in JSON format and Markdown format
+                report_md = export_report(
+                    diagnostics=[{
+                        "index": 0,
+                        "text": "Это тестовое предложение.",
+                        "status": "flagged",
+                        "issue_type": "ai_cliche",
+                        "severity": "medium",
+                        "explanation": "Обнаружены шаблоны.",
+                        "suggestion": "Изменить.",
+                        "predictability_risk": 20.0,
+                        "uniformity_risk": 30.0,
+                        "translationese_risk": 15.0,
+                        "redundancy_risk": 10.0,
+                        "citation_audit": audits
+                    }],
+                    citations=audits,
+                    format=ReportFormat.markdown
+                )
+                assert "质量与文献证据链审计报告" in report_md
+                assert "smith2020" in report_md
+                assert "20.0%" in report_md # verify that risk values do not multiply by 100
+                
+            asyncio.run(run_audit())
+            
+            # 5. Clear references
+            clear_res = clear_references(session_id)
+            assert clear_res["status"] == "success"
+            list_res = list_references(session_id)
+            assert len(list_res["bibtex_keys"]) == 0
+            assert len(list_res["pdf_keys"]) == 0
+            
+    finally:
+        if os.path.exists(tmp_dir):
+            shutil.rmtree(tmp_dir)
+
+

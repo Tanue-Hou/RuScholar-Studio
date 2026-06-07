@@ -39,3 +39,28 @@ def test_style_judge_real():
     assert "issues" in res
     assert "safe_to_rewrite" in res
     assert isinstance(res["issues"], list)
+
+def test_repair_json_string():
+    from naturalization_layer.llm_judge import repair_json_string
+    
+    # 1. Truncated value inside string
+    truncated = '{"issues": [{"issue_type": "ai_cliche", "rewrite_suggestion": "Это пример'
+    repaired = repair_json_string(truncated)
+    assert repaired == '{"issues": [{"issue_type": "ai_cliche", "rewrite_suggestion": "Это пример"}]}'
+    
+    # 2. Literal newline inside string
+    newline_in_str = '{"issues": [{"explanation": "Первое предложение.\nВторое предложение."}]}'
+    repaired = repair_json_string(newline_in_str)
+    # Check that it escaped the literal newline to \n
+    # Note that in python string representation, \n is a single char, and double backslash n is two chars.
+    # The source string newline_in_str has a literal newline. The output should have escaped backslash + n.
+    assert "\\n" in repaired
+    
+    # 3. Trailing comma
+    trailing_comma = '{"safe_to_rewrite": true,}'
+    repaired = repair_json_string(trailing_comma)
+    assert repaired == '{"safe_to_rewrite": true}'
+    
+    # 4. Empty string
+    assert repair_json_string("") == "{}"
+

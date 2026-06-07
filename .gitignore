@@ -33,3 +33,16 @@ Thumbs.db
 scratch/
 frontend/rewrite_app.py
 
+# Frontend build artifacts
+frontend/node_modules/
+frontend/dist/
+
+# Local secrets and machine-specific settings
+.env
+.env.*
+*.env
+!.env.example
+
+# Runtime exports
+exports/
+reports/

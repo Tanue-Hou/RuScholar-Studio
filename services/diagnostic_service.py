@@ -11,8 +11,10 @@ from naturalization_layer.style_risk import calculate_style_risks, calculate_red
 from naturalization_layer.translationese_risk import calculate_translationese_risk
 from naturalization_layer.citation_integrity import check_citation_integrity
 
-SKILL_RULES_PATH = os.path.expanduser("~/.gemini/config/skills/phd-thesis-butler/assets/references/polishing_rules_v5.json")
-CALIBRATION_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "naturalization_layer/calibration/calibration_config.json")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_SKILL_RULES_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/rules/polishing_rules_v5.json")
+SKILL_RULES_PATH = os.getenv("THESIS_BUTLER_RULES_PATH", PROJECT_SKILL_RULES_PATH)
+CALIBRATION_CONFIG_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/calibration/calibration_config.json")
 
 global_clusters = {}
 calibration_db = {}
@@ -235,6 +237,21 @@ async def run_sentence_diagnose_stream(
                 res_dict["think"] = diag.get("think", "")
                 
                 issues = diag.get("issues", [])
+                
+                # Low PPL Veto: override passed status if PPL is lower than ppl_low
+                ppl_val = res_dict.get("ppl")
+                if not issues and ppl_val is not None and ppl_val < ppl_low:
+                    issues = [{
+                        "issue_type": "ai_generated_suspicion",
+                        "severity": "high",
+                        "evidence": text_str,
+                        "explanation_zh": f"物理困惑度极低 (PPL = {ppl_val:.2f} < {ppl_low:.1f})，触发一票否决 AI 风险拦截机制。该句的词汇分布过于平滑、可预测性极高，符合典型的机器生成特征。",
+                        "explanation_ru": f"Крайне низкая физическая перплексивность (PPL = {ppl_val:.2f} < {ppl_low:.1f}), сработал механизм безусловной блокировки риска ИИ. Распределение слов слишком гладкое и предсказуемое, что характерно для генеративного текста.",
+                        "rewrite_suggestion": "建议微调句式结构，打破过度平滑的词汇搭配，增强句子的学术个性与复杂度。"
+                    }]
+                    if not res_dict.get("think"):
+                        res_dict["think"] = f"【一票否决拦截】检测到物理困惑度极低（PPL = {ppl_val:.2f}），已触发硬性判定拦截。"
+
                 if issues:
                     issue = issues[0]
                     res_dict["issue_type"] = issue.get('issue_type', '')
@@ -407,6 +424,21 @@ async def run_sentence_diagnose_stream(
                 res_dict["ppl"] = ppl_val
                     
                 issues = diag.get("issues", [])
+                
+                # Low PPL Veto: override passed status if PPL is lower than ppl_low
+                ppl_val = res_dict.get("ppl")
+                if not issues and ppl_val is not None and ppl_val < ppl_low:
+                    issues = [{
+                        "issue_type": "ai_generated_suspicion",
+                        "severity": "high",
+                        "evidence": text_str,
+                        "explanation_zh": f"物理困惑度极低 (PPL = {ppl_val:.2f} < {ppl_low:.1f})，触发一票否决 AI 风险拦截机制。该句的词汇分布过于平滑、可预测性极高，符合典型的机器生成特征。",
+                        "explanation_ru": f"Крайне низкая физическая перплексивность (PPL = {ppl_val:.2f} < {ppl_low:.1f}), сработал механизм безусловной блокировки риска ИИ. Распределение слов слишком гладкое и предсказуемое, что характерно для генеративного текста.",
+                        "rewrite_suggestion": "建议微调句式结构，打破过度平滑的词汇搭配，增强句子的学术个性与复杂度。"
+                    }]
+                    if not res_dict.get("think"):
+                        res_dict["think"] = f"【一票否决拦截】检测到物理困惑度极低（PPL = {ppl_val:.2f}），已触发硬性判定拦截。"
+
                 if issues:
                     issue = issues[0]
                     res_dict["issue_type"] = issue.get('issue_type', '')

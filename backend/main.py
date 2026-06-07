@@ -4,7 +4,7 @@ import json
 import asyncio
 import math
 import uuid
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from contextlib import asynccontextmanager
@@ -27,8 +27,10 @@ engine = None
 judge = None
 citation_judge_global = None
 
-SKILL_RULES_PATH = os.path.expanduser("~/.gemini/config/skills/phd-thesis-butler/assets/references/polishing_rules_v5.json")
-CALIBRATION_CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "naturalization_layer/calibration/calibration_config.json")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_SKILL_RULES_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/rules/polishing_rules_v5.json")
+SKILL_RULES_PATH = os.getenv("THESIS_BUTLER_RULES_PATH", PROJECT_SKILL_RULES_PATH)
+CALIBRATION_CONFIG_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/calibration/calibration_config.json")
 global_clusters = {}
 calibration_db = {}
 
@@ -435,19 +437,19 @@ from fastapi.staticfiles import StaticFiles
 # Future Extension Interfaces (Placeholder)
 @app.post("/api/polish")
 async def polish_text(text: str):
-    return {"status": "not_implemented"}
+    raise HTTPException(status_code=501, detail="Use /api/diagnose or the MCP suggest_revision tool for revision suggestions.")
 
 @app.post("/api/references")
 async def check_references(text: str):
-    return {"status": "not_implemented"}
+    raise HTTPException(status_code=501, detail="Use /api/upload_references or the MCP audit_citations tool for citation checks.")
 
 @app.post("/api/format")
 async def check_format(text: str):
-    return {"status": "not_implemented"}
+    raise HTTPException(status_code=501, detail="Document formatting checks are reserved for a future release.")
 
 @app.post("/api/structure")
 async def analyze_structure(text: str):
-    return {"status": "not_implemented"}
+    raise HTTPException(status_code=501, detail="Structure analysis is reserved for a future release.")
 
 # Serve frontend build statically
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
@@ -458,4 +460,6 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    host = os.getenv("THESIS_BUTLER_HOST", "0.0.0.0")
+    port = int(os.getenv("THESIS_BUTLER_PORT", "8000"))
+    uvicorn.run("main:app", host=host, port=port, reload=True)

@@ -1,12 +1,21 @@
 from llama_cpp import Llama
 import math
+import os
+from typing import Optional
 
 class PPLEngine:
-    def __init__(self, model_path: str):
-        # n_gpu_layers=-1 delegates all layers to Metal/CUDA
+    def __init__(self, model_path: str, n_gpu_layers: Optional[int] = None):
+        if n_gpu_layers is None:
+            n_gpu_layers = int(os.getenv("THESIS_BUTLER_GPU_LAYERS", "-1"))
+
         # logits_all=True is required to evaluate existing prompt
         # n_ctx=3072 is necessary to prevent context overflow during styling diagnostics and NLI audits
-        self.llm = Llama(model_path=model_path, n_gpu_layers=-1, n_ctx=3072, logits_all=True, verbose=False)
+        try:
+            self.llm = Llama(model_path=model_path, n_gpu_layers=n_gpu_layers, n_ctx=3072, logits_all=True, verbose=False)
+        except Exception:
+            if n_gpu_layers == 0:
+                raise
+            self.llm = Llama(model_path=model_path, n_gpu_layers=0, n_ctx=3072, logits_all=True, verbose=False)
         
     def evaluate_sentence_ppl(
         self, 
