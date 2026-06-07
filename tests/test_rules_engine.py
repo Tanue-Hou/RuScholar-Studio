@@ -61,3 +61,29 @@ def test_should_run_ppl_heuristic():
     # Above smart_words -> True
     diag_smart_yes_len = {"is_protected": False, "original_text": "Это предложение длиной ровно одиннадцать слов в данном контексте и оно длинное.", "cliches_found": []}
     assert should_run_ppl_heuristic(diag_smart_yes_len, "Smart Probe", min_words=3, smart_words=10) is True
+
+def test_analyze_text_rules_bibliography():
+    text = (
+        "Это основное предложение научной статьи. "
+        "Второй абзац текста. "
+        "References\n"
+        "[1] Smith J. AI research paper. 2025.\n"
+        "[2] Ivanov I. Russian NLP model. 2026."
+    )
+    result = analyze_text_rules(text)
+    assert result["sentence_diagnostics"][0]["is_bibliography"] is False
+    assert result["sentence_diagnostics"][1]["is_bibliography"] is False
+    
+    smith_found = False
+    ivanov_found = False
+    for diag in result["sentence_diagnostics"]:
+        txt = diag["original_text"]
+        if "Smith" in txt:
+            assert diag["is_bibliography"] is True
+            smith_found = True
+        if "Ivanov" in txt:
+            assert diag["is_bibliography"] is True
+            ivanov_found = True
+            
+    assert smith_found is True
+    assert ivanov_found is True

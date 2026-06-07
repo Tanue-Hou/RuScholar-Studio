@@ -99,6 +99,16 @@ def analyze_text_rules(text: str) -> dict:
     preprocessor = TextPreprocessor()
     protected_text, mapping = preprocessor.protect(text)
     
+    # Identify bibliography section start
+    lower_text = text.lower()
+    bib_headers = ["список литературы", "литература", "references", "библиографический список"]
+    bib_start = -1
+    for header in bib_headers:
+        idx = lower_text.rfind(header)
+        if idx != -1:
+            bib_start = idx
+            break
+            
     try:
         nlp = spacy.load("ru_core_news_sm")
         doc = nlp(protected_text)
@@ -127,10 +137,22 @@ def analyze_text_rules(text: str) -> dict:
     total_cliches_count = 0
     all_matched_cliches = set()
     
+    search_pos = 0
     for sent in sentences_doc:
         sent_text_protected = sent.text
         sent_text_restored = preprocessor.restore(sent_text_protected, mapping)
         sentences_restored.append(sent_text_restored)
+        
+        is_bibliography = False
+        if bib_start != -1:
+            char_pos = text.find(sent_text_restored, search_pos)
+            if char_pos != -1:
+                search_pos = char_pos + len(sent_text_restored)
+                if char_pos >= bib_start:
+                    is_bibliography = True
+            else:
+                if search_pos >= bib_start:
+                    is_bibliography = True
         
         sent_text_restored_lower = sent_text_restored.lower()
         cliches_found = []
@@ -200,7 +222,8 @@ def analyze_text_rules(text: str) -> dict:
             "genitive_chains": list(set(genitive_chains)),
             "cliches_found": cliches_found,
             "connectors_found": connectors_found,
-            "is_protected": is_protected
+            "is_protected": is_protected,
+            "is_bibliography": is_bibliography
         })
 
     lengths = [len([t for t in s if not getattr(t, 'is_punct', False)]) for s in sentences_doc]

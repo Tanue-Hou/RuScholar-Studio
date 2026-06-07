@@ -28,6 +28,60 @@ def parse_bibliography_numbers(text: str) -> set[int]:
             numbers.add(int(num_str))
     return numbers
 
+def extract_bibliography_mapping(text: str) -> dict[str, str]:
+    """
+    Parses the bibliography section at the end of the text,
+    and returns a mapping from reference number/key (as str) to the full reference line.
+    """
+    lower_text = text.lower()
+    bib_headers = ["список литературы", "литература", "references", "библиографический список"]
+    
+    bib_start = -1
+    for header in bib_headers:
+        idx = lower_text.rfind(header)
+        if idx != -1:
+            bib_start = idx
+            break
+            
+    if bib_start == -1:
+        return {}
+        
+    bib_section = text[bib_start:]
+    lines = bib_section.split('\n')
+    
+    mapping = {}
+    current_key = None
+    current_text = []
+    
+    pattern = r'^\s*(?:\[([a-zA-Z0-9_.-]+)\]|([0-9]+)\.\s+)'
+    
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+            
+        # Skip header line itself
+        if any(h in stripped.lower() for h in bib_headers) and len(stripped) < 30:
+            continue
+            
+        match = re.match(pattern, line)
+        if match:
+            if current_key and current_text:
+                mapping[current_key] = " ".join(current_text).strip()
+            
+            key = match.group(1) or match.group(2)
+            content = line[match.end():].strip()
+            current_key = key.lower()
+            current_text = [content]
+        else:
+            if current_key:
+                current_text.append(stripped)
+                
+    if current_key and current_text:
+        mapping[current_key] = " ".join(current_text).strip()
+        
+    return mapping
+
 def parse_citations_in_text(text: str) -> set[int]:
     """
     Find all citation numbers used in the document text, e.g. [1], [2, 3], [4-7].
