@@ -5,7 +5,8 @@ class PPLEngine:
     def __init__(self, model_path: str):
         # n_gpu_layers=-1 delegates all layers to Metal/CUDA
         # logits_all=True is required to evaluate existing prompt
-        self.llm = Llama(model_path=model_path, n_gpu_layers=-1, n_ctx=2048, logits_all=True, verbose=False)
+        # n_ctx=3072 is necessary to prevent context overflow during styling diagnostics and NLI audits
+        self.llm = Llama(model_path=model_path, n_gpu_layers=-1, n_ctx=3072, logits_all=True, verbose=False)
         
     def evaluate_sentence_ppl(
         self, 

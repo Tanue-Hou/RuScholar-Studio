@@ -129,8 +129,8 @@ You must return a JSON object containing exactly one key "discipline" with the c
                 raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, context_str)
             else:
                 # Fallback to local
-                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. Write the final explanation_zh inside the JSON object clearly and informatively.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
-                response = self.llm(prompt, max_tokens=1536, stop=["<|im_end|>"])
+                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). Keep your reasoning extremely concise (under 200 words) and focused. Write the final explanation_zh inside the JSON object clearly and informatively.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n"
+                response = self.llm(prompt, max_tokens=1024, stop=["<|im_end|>"])
                 raw_text = response["choices"][0]["text"].strip()
         except Exception as api_err:
             if engine_type == "local":
