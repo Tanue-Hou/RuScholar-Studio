@@ -181,8 +181,8 @@ function App() {
   const startAnalysis = async () => {
     if (!documentText) return;
 
-    if (engineType === 'local' && localModelStatus === 'missing') {
-      alert("Local model is missing. Please download the Qwen GGUF model in the header first, or switch to a Cloud engine.");
+    if ((engineType === 'local' || engineType.startsWith('hybrid')) && localModelStatus === 'missing') {
+      alert("本地大模型尚未就绪。请先在顶栏点击 'Download Local Model' 下载并初始化大模型，或者切换到纯云端 Cloud 引擎。");
       return;
     }
     
@@ -542,17 +542,40 @@ function App() {
             </div>
           )}
 
-          {engineType === 'local' && localModelStatus === 'missing' && (
-            <button 
-              onClick={downloadLocalModel}
-              style={{ backgroundColor: 'var(--apple-blue)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}
-            >
-              Download Local Model
-            </button>
-          )}
-
-          {engineType === 'local' && localModelStatus === 'downloading' && (
-            <div style={{ color: 'var(--apple-blue)', fontSize: '13px' }}>{Math.round(downloadProgress)}%</div>
+          {(engineType === 'local' || engineType.startsWith('hybrid')) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {localModelStatus === 'exists' && (
+                <div style={{ 
+                  color: '#34c759', 
+                  fontSize: '13px', 
+                  fontWeight: 500,
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '6px',
+                  backgroundColor: 'rgba(52, 199, 89, 0.15)',
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(52, 199, 89, 0.3)'
+                }}>
+                  <span>本地模型已就绪</span>
+                  <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: '#34c759', borderRadius: '50%' }}></span>
+                </div>
+              )}
+              {localModelStatus === 'missing' && (
+                <button 
+                  onClick={downloadLocalModel}
+                  style={{ backgroundColor: 'var(--apple-blue)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}
+                >
+                  Download Local Model
+                </button>
+              )}
+              {localModelStatus === 'downloading' && (
+                <div style={{ color: 'var(--apple-blue)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>正在下载模型:</span>
+                  <span style={{ fontWeight: 'bold' }}>{Math.round(downloadProgress)}%</span>
+                </div>
+              )}
+            </div>
           )}
           
           <button 

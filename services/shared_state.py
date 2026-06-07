@@ -8,5 +8,6 @@ session_references = {}
 model_lock = asyncio.Lock()
 
 # Model Path configuration
-MODEL_DIR = "models"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "Qwen3-4B-Q5_K_M.gguf")
