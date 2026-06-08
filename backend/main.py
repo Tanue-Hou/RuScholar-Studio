@@ -29,7 +29,7 @@ citation_judge_global = None
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_SKILL_RULES_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/rules/polishing_rules_v5.json")
-SKILL_RULES_PATH = os.getenv("THESIS_BUTLER_RULES_PATH", PROJECT_SKILL_RULES_PATH)
+SKILL_RULES_PATH = os.getenv("RUSCHOLAR_RULES_PATH", PROJECT_SKILL_RULES_PATH)
 CALIBRATION_CONFIG_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/calibration/calibration_config.json")
 global_clusters = {}
 calibration_db = {}
@@ -460,6 +460,6 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    host = os.getenv("THESIS_BUTLER_HOST", "0.0.0.0")
-    port = int(os.getenv("THESIS_BUTLER_PORT", "8000"))
+    host = os.getenv("RUSCHOLAR_HOST", "0.0.0.0")
+    port = int(os.getenv("RUSCHOLAR_PORT", "8000"))
     uvicorn.run("main:app", host=host, port=port, reload=True)

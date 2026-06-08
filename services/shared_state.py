@@ -9,7 +9,7 @@ model_lock = asyncio.Lock()
 
 # Smart Model Path resolver: supports root relative detection and fallback
 def resolve_model_path() -> str:
-    env_path = os.getenv("THESIS_BUTLER_MODEL_PATH")
+    env_path = os.getenv("RUSCHOLAR_MODEL_PATH")
     if env_path:
         return os.path.abspath(os.path.expanduser(env_path))
 

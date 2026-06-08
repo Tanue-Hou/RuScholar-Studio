@@ -6,7 +6,7 @@ from typing import Optional
 class PPLEngine:
     def __init__(self, model_path: str, n_gpu_layers: Optional[int] = None):
         if n_gpu_layers is None:
-            n_gpu_layers = int(os.getenv("THESIS_BUTLER_GPU_LAYERS", "-1"))
+            n_gpu_layers = int(os.getenv("RUSCHOLAR_GPU_LAYERS", "-1"))
 
         # logits_all=True is required to evaluate existing prompt
         # n_ctx=3072 is necessary to prevent context overflow during styling diagnostics and NLI audits
