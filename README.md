@@ -8,13 +8,430 @@
 
 ---
 
-### Language / Язык / 语言
+### 语言 / Язык / Language
 
-[English](README.md) · [Русский](README_RU.md) · [简体中文](README_ZH.md)
+[简体中文](#简体中文) · [Русский](#русский) · [English](#english)
 
 ---
 
-## 📸 Web UI Cockpit
+## 简体中文
+### 📸 Web UI 驾驶舱交互界面
+
+下面是系统多轨诊断与人机协作审阅界面的实际运行效果：
+
+![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
+
+> [!IMPORTANT]
+> Web UI 会实时高亮论文正文中的风格、句法和参考文献证据链异常（黄色表示警告，红色表示高风险）。这些标记是为作者提供**修改建议与证据链线索**，绝非对学术不端或 AI 代写的自动裁决。
+
+---
+
+### 🌟 核心优势
+
+*   **不做黑箱 AI 检测率**：系统强调可追溯的证据链，输出的是具体的风险维度、指标、诊断释义、原句以及可复核的引文献片段，拒绝给出单一的“AI 检测率百分比”评分。
+*   **俄语学术写作定向优化**：围绕俄语学术写作中的名词化倾斜（名动比）、被动语态泛滥、名词第二格链式堆叠、缺少谓语动词、以及英语式直译进行深度启发式规则计算，而非套用通用英语检测器。
+*   **本地隐私绝对保障**：原生支持本地 GGUF 大模型（`Qwen3-4B`）、本地物理困惑度（PPL）探针、本地 PDF/BibTeX 文献检索，未发表的学术手稿完全离线处理，确保数据不泄露。
+*   **LLM-as-NLI 证据链验证**：利用自然语言推理（Natural Language Inference）模型，对正文中的 claim 论点与检索到的引文 snippet 进行蕴含、矛盾、无关的三分类逻辑判定。
+*   **FastMCP 协议原生支持**：内嵌 stdio JSON-RPC 通道，允许 AI 客户端（如 Claude Code, Cursor, Claude Desktop）直接调用工具，实现一键引用校验和报告导出。
+*   **云端与本地灵活协同**：支持纯本地模式（离线保护）、混合模式（本地 PPL 估算 + 云端 DeepSeek 协同判定）以及纯云端模式。
+
+---
+
+### 🧠 与 PhD Thesis Butler Skill 的关系
+
+RuScholar Studio 是在 **PhD Thesis Butler** (`phd-thesis-butler`) 自定义 AI Agent Skill 知识资产之上建立的可视化工程执行层。
+
+```
++-----------------------------------------------------------+
+|          PhD Thesis Butler Skill (上游大脑知识库)         |
+|  - 拥有 16.7K 条俄语学术范式模板，提炼自 2,118 篇论文    |
+|  - 提供学术大纲规划、段落句式推荐、学术修辞规则            |
++-----------------------------------------------------------+
+                              |
+                              v
++-----------------------------------------------------------+
+|            RuScholar Studio (下游可视化与工程执行层)      |
+|  - Web UI 审阅面板           - FastMCP 本地后台 daemon     |
+|  - 本地 PPL / NLI 物理探针    - PDF 解析器 & BM25 检索      |
++-----------------------------------------------------------+
+```
+
+| 维度 | PhD Thesis Butler Skill | RuScholar Studio |
+| :--- | :--- | :--- |
+| **定位** | AI 助手加载的俄语学术写作技能库 (Skill) | 可 clone、可运行、可部署的审计与润色工作台 |
+| **核心资产** | 16,722 条俄语学术模板，覆盖 5 大理/工/文/社学科簇 | 诊断服务、Web UI 页面、MCP 服务端、报告生成器 |
+| **核心任务** | 章节大纲设计、论点角色分配、句法结构润色 | 风格风险检测、物理 PPL 探针、引文一致性、NLI 逻辑审计 |
+| **运行方式** | 作为 Codex/Hermes/Claude 类助手的 skill 加载 | 作为本地 FastAPI 后端及 React 页面运行 |
+| **上下游关系** | 提供上游学术知识和修辞范式 | 提供下游工程化执行、算法审计与可视化展示 |
+
+---
+
+### 🛠️ 系统要求
+
+| 资源 | 最低配置 | 推荐配置 |
+| :--- | :--- | :--- |
+| **Python** | 3.9+ | 3.10+ |
+| **Node.js** | 18+ | 20+ |
+| **RAM 内存** | 8 GB（适用于纯云端模式） | 16 GB 以上（适用于本地 GGUF 推理） |
+| **磁盘空间** | 500 MB（源码与依赖包） | 4 GB（含 2.7 GB 的本地模型文件） |
+| **操作系统** | macOS / Windows / Linux | macOS Apple Silicon（可使用 Metal 硬件加速） |
+
+---
+
+### 🚀 快速开始
+
+#### 1. 一键安装与环境配置
+
+克隆仓库并运行一键配置脚本：
+
+**macOS / Linux**:
+```bash
+git clone https://github.com/Tanue-Hou/RuScholar-Studio.git
+cd RuScholar-Studio
+chmod +x setup.sh
+./setup.sh
+```
+*   如果要在安装时自动下载 2.7 GB 本地模型：`DOWNLOAD_MODEL=1 ./setup.sh`
+*   Apple Silicon 用户如果想编译支持 Metal 硬件加速：`INSTALL_LLAMA_METAL=1 ./setup.sh`
+
+**Windows (PowerShell)**:
+```powershell
+.\setup.ps1
+```
+*   下载模型：`.\setup.ps1 -DownloadModel`
+
+#### 2. 本地大模型下载
+
+若需使用 `local` 或 `hybrid` 诊断模式，系统依赖 **Qwen3-4B-Q5_K_M GGUF** 大模型。该模型默认放置在：
+```
+models/Qwen3-4B-Q5_K_M.gguf
+```
+
+您可以通过命令行手动触发高速下载：
+```bash
+python -c "from naturalization_layer.model_downloader import download_model; from services.shared_state import MODEL_PATH; download_model(MODEL_PATH)"
+```
+
+---
+
+### 💻 启动 Web UI 驾驶舱
+
+运行单端口一体化服务器（FastAPI 会自动托管构建完成的 React 静态页面）：
+
+```bash
+source .venv/bin/activate
+python backend/main.py
+```
+在浏览器中打开 **`http://localhost:8000`**。
+
+#### 开发者模式（热更新）
+若要对前端 React 代码进行修改和调试：
+```bash
+# 终端 1: 启动后端 API 服务
+source .venv/bin/activate
+python backend/main.py
+
+# 终端 2: 启动前端 Vite 调试服务
+cd frontend
+npm run dev
+```
+打开输出的开发服务器地址（通常是 `http://localhost:5173`）。
+
+---
+
+### 🔌 MCP 客户端集成
+
+要将工作台连接 to Claude Desktop、Claude Code 或 Cursor 等智能客户端，使其能自动读取、注册并核验文献：
+
+#### 1. Claude Desktop
+在 `~/Library/Application Support/Claude/claude_desktop_config.json` 中添加：
+```json
+{
+  "mcpServers": {
+    "ruscholar-studio": {
+      "command": "python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "<YOUR_CLONE_PATH>/RuScholar-Studio"
+    }
+  }
+}
+```
+
+#### 2. Claude Code
+在终端中执行：
+```bash
+claude mcp add ruscholar-studio python -m mcp_server.server --cwd "<YOUR_CLONE_PATH>/RuScholar-Studio"
+```
+
+#### 暴露的工具列表
+1.  `analyze_manuscript`：对学术手稿进行句式、PPL 困惑度以及翻译腔分析。
+2.  `audit_citations`：交叉校验文内引用序号与篇末参考文献列表的对应关系。
+3.  `retrieve_evidence`：从本地 PDF/BibTeX 文件库或在线 OpenAlex 接口抓取文献原句作为论据支撑。
+4.  `suggest_revision`：结合上下文和学科规则对问题句进行重写润色。
+5.  `export_report`：将当前诊断结果导出为 Markdown/JSON 格式报告。
+6.  `check_model_installed`：检测本地大模型文件状态与大小。
+7.  `download_model_tool`：自动执行 Qwen 本地大模型下载。
+8.  `register_references`：注册 BibTeX 文本和/或本地 PDF 物理路径到会话。
+9.  `clear_references`：清除当前会话缓存的文献。
+10. `list_references`：列出当前会话已注册的文献库。
+
+---
+
+### ⚙️ 配置项说明
+
+在项目根目录下复制 `.env.example` 并重命名为 `.env`：
+```bash
+cp .env.example .env
+```
+
+| 环境变量名 | 默认值 | 作用与配置说明 |
+| :--- | :--- | :--- |
+| `DEEPSEEK_API_KEY` | *(空)* | 云端 Judge 推理时所需的 API Key。 |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | 兼容 OpenAI 格式的云端大模型接口地址。 |
+| `RUSCHOLAR_MODEL_PATH` | `models/Qwen3-4B-Q5_K_M.gguf` | 本地 GGUF 大模型文件的物理存放路径。 |
+| `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/...` | 自动下载本地大模型时所用的 ModelScope 节点 URL。 |
+| `RUSCHOLAR_RULES_PATH` | `naturalization_layer/rules/polishing_rules_v5.json` | 学科写作规范及学术模板数据库路径。 |
+| `RUSCHOLAR_GPU_LAYERS` | `-1` | 物理 PPL 探针推理时的 GPU 卸载层数（-1 表示最大，0 表示纯 CPU）。 |
+| `RUSCHOLAR_HOST` | `0.0.0.0` | 后端服务器绑定的 host。 |
+| `RUSCHOLAR_PORT` | `8000` | 后端服务器绑定的 port。 |
+
+---
+
+### 🧪 单元测试
+
+运行测试套件，验证服务层、MCP JSON-RPC、NLI / RAG 文献检索：
+
+```bash
+pytest -v
+```
+
+---
+
+### 📝 GitHub 仓库打包与推送检查
+
+在推送代码或发布 Release 时，请注意：
+*   **已忽略的文件**：根目录的 `.gitignore` 已经将本地大模型 (`models/*.gguf`)、前端依赖 (`frontend/node_modules/`)、静态构建产物 (`frontend/dist/`)、临时缓存 (`.pytest_cache/`, `scratch/`) 排除，保证 Git 仓库不产生臃肿。
+*   **关键的 Python 导入**：`services/`、`mcp_server/`、`backend/` 和 `tests/` 目录下的 `__init__.py` 已经全部就绪并处于 git 跟踪状态，确保用户克隆后不会遇到 `ModuleNotFoundError`。
+
+---
+
+### 🤝 许可
+
+RuScholar Studio 采用 **MIT License** 开源。
+
+---
+
+## Русский
+### 📸 Интерфейс Web UI
+
+Ниже показана визуальная панель управления гибридного аудита в действии:
+
+![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
+
+> [!NOTE]
+> Web UI подсвечивает стилистические аномалии и проблемы с источниками в реальном времени. Предложения кодируются цветом (желтый для предупреждения, красный для высокого риска) на основе нарушения правил диссертационного письма, физического показателя перплексивности (PPL) и проверки цитирования через NLI. Данные отчеты служат **помощником для рецензирования**, а не автоматическим вердиктом о плагиате или использовании ИИ.
+
+---
+
+### 🌟 Ключевые преимущества
+
+*   **Без черных ящиков с "AI-процентом"**: Система уходит от упрощенной оценки «процента ИИ». Вместо этого она предоставляет понятные стилистические метрики, лингвистическую статистику и проверяемые цитаты из источников.
+*   **Специфические правила для русского научного стиля**: Правила адаптированы под русский академический язык (анализ номинализации, злоупотребления пассивным залогом, нагромождения цепочек родительного падежа, отсутствия смысловых глаголов в длинных предложениях).
+*   **Конфиденциальность рукописей**: Локальный запуск GGUF-модели (`Qwen3-4B`), офлайн-оценка физической перплексивности (PPL) и локальный поиск по базам PDF/BibTeX гарантируют сохранность ваших данных на вашем ПК.
+*   **Аудит цитирования через NLI-судью**: Автоматически сопоставляет утверждения в тексте статьи с абстрактами источников, классифицируя логическую связь как *Entailment (Подтверждается)*, *Contradiction (Противоречит)* или *Neutral (Недостаточно данных)*.
+*   **Поддержка протокола FastMCP**: Встроенный stdio JSON-RPC демон позволяет AI-агентам (таким как Claude Code, Cursor, Claude Desktop) напрямую работать с вашей локальной библиотекой и аудировать рукопись.
+*   **Гибридная архитектура**: Поддерживается полностью локальный режим, гибридный режим (локальный расчет PPL + облачный анализ через DeepSeek) и чисто облачный режим.
+
+---
+
+### 🧠 Связь с навыком PhD Thesis Butler
+
+RuScholar Studio представляет собой визуальную среду выполнения, построенную поверх навыка **PhD Thesis Butler** (`phd-thesis-butler`) для AI-ассистентов.
+
+```
++-----------------------------------------------------------+
+|          PhD Thesis Butler Skill (Базовые знания)         |
+|  - 16.7K шаблонов из 2 118 научных работ/авторефератов    |
+|  - Дисциплинарные стилистические правила диссертаций      |
++-----------------------------------------------------------+
+                              |
+                              v
++-----------------------------------------------------------+
+|             RuScholar Studio (Инженерный слой)            |
+|  - Панель Web UI            - Демон FastMCP stdio         |
+|  - Локальные PPL/NLI зонды  - PDF-парсер и RAG-поиск      |
++-----------------------------------------------------------+
+```
+
+| Параметр | PhD Thesis Butler Skill | RuScholar Studio |
+| :--- | :--- | :--- |
+| **Роль** | Навык AI-ассистента по написанию диссертаций | Исполняемая среда и платформа аудита |
+| **Активы** | 16 722 шаблона в 5 дисциплинарных кластерах | Сервисы диагностики, Web UI, MCP, генератор отчетов |
+| **Задачи** | Проектирование плана, подбор шаблонов, полировка | Расчет style risk, PPL, аудит цитирования и NLI |
+| **Запуск** | Загружается как skill в Codex/Hermes/Claude-подобном ассистенте | Запускается локально как FastAPI/React приложение |
+| **Связь** | Источник академических знаний и лингвистических правил | Инженерная реализация и слой верификации доказательств |
+
+---
+
+### 🛠️ Системные требования
+
+| Ресурс | Минимум | Рекомендуется |
+| :--- | :--- | :--- |
+| **Python** | 3.9+ | 3.10+ |
+| **Node.js** | 18+ | 20+ |
+| **RAM** | 8 GB для cloud-only режима | 16 GB+ для локальной модели |
+| **Диск** | 500 MB для исходного кода и зависимостей | 4 GB с учетом 2.7 GB GGUF-модели |
+| **ОС** | macOS / Windows / Linux | macOS Apple Silicon (с ускорением Metal) |
+
+---
+
+### 🚀 Быстрый старт
+
+#### 1. Установка
+
+Клонируйте репозиторий и запустите скрипт настройки:
+
+**macOS / Linux**:
+```bash
+git clone https://github.com/Tanue-Hou/RuScholar-Studio.git
+cd RuScholar-Studio
+chmod +x setup.sh
+./setup.sh
+```
+*   Чтобы автоматически скачать локальную модель во время настройки: `DOWNLOAD_MODEL=1 ./setup.sh`
+*   Чтобы скомпилировать `llama-cpp-python` с поддержкой Metal на Apple Silicon: `INSTALL_LLAMA_METAL=1 ./setup.sh`
+
+**Windows (PowerShell)**:
+```powershell
+.\setup.ps1
+```
+*   Чтобы скачать модель: `.\setup.ps1 -DownloadModel`
+
+#### 2. Локальная модель
+
+Для использования режимов `local` или `hybrid` офлайн требуется локальная модель **Qwen3-4B-Q5_K_M GGUF** (около 2.7 GB). По умолчанию она должна находиться по пути:
+```
+models/Qwen3-4B-Q5_K_M.gguf
+```
+
+Загрузка через CLI:
+```bash
+python -c "from naturalization_layer.model_downloader import download_model; from services.shared_state import MODEL_PATH; download_model(MODEL_PATH)"
+```
+
+---
+
+### 💻 Запуск Web UI
+
+Запуск единого backend-сервера (FastAPI автоматически раздает сборку React):
+
+```bash
+source .venv/bin/activate
+python backend/main.py
+```
+Откройте в браузере **`http://localhost:8000`**.
+
+#### Режим разработки (Hot Reload)
+Для изменения фронтенд-кода React:
+```bash
+# Терминал 1: Запуск API
+source .venv/bin/activate
+python backend/main.py
+
+# Терминал 2: Запуск Vite Dev Server
+cd frontend
+npm run dev
+```
+Откройте порт dev-сервера (обычно `http://localhost:5173`).
+
+---
+
+### 🔌 Интеграция с MCP
+
+Чтобы AI-агенты (Claude Desktop, Claude Code, Cursor) могли напрямую проверять ссылки и делать аудит рукописей:
+
+#### 1. Claude Desktop
+Добавьте сервер в `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "ruscholar-studio": {
+      "command": "python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "<YOUR_CLONE_PATH>/RuScholar-Studio"
+    }
+  }
+}
+```
+
+<h4>2. Claude Code</h4>
+Запустите команду:
+```bash
+claude mcp add ruscholar-studio python -m mcp_server.server --cwd "<YOUR_CLONE_PATH>/RuScholar-Studio"
+```
+
+#### Доступные инструменты MCP:
+1.  `analyze_manuscript`: Стилистический аудит, анализ переводности и расчет PPL-риска.
+2.  `audit_citations`: Проверка согласованности внутритекстовых ссылок и списка литературы.
+3.  `retrieve_evidence`: Поиск цитат в локальных PDF/BibTeX или OpenAlex.
+4.  `suggest_revision`: Рекомендации по переписыванию на основе правил диссертаций.
+5.  `export_report`: Экспорт аудиторского отчета в Markdown/JSON.
+6.  `check_model_installed`: Проверка наличия и целостности локальной модели.
+7.  `download_model_tool`: Загрузка локальной модели Qwen GGUF.
+8.  `register_references`: Регистрация BibTeX или локальных путей к PDF.
+9.  `clear_references`: Очистка кэша источников сессии.
+10. `list_references`: Список зарегистрированных источников сессии.
+
+---
+
+### ⚙️ Переменные окружения
+
+Создайте файл `.env` в корневой папке на основе примера `.env.example`:
+```bash
+cp .env.example .env
+```
+
+| Переменная | По умолчанию | Описание |
+| :--- | :--- | :--- |
+| `DEEPSEEK_API_KEY` | *(Пусто)* | API-ключ для облачного judge-модуля. |
+| `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | URL облачного API DeepSeek. |
+| `RUSCHOLAR_MODEL_PATH` | `models/Qwen3-4B-Q5_K_M.gguf` | Локальный путь к модели GGUF. |
+| `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/...` | Ссылка для автоматической загрузки модели. |
+| `RUSCHOLAR_RULES_PATH` | `naturalization_layer/rules/polishing_rules_v5.json` | Путь к правилам письма Thesis Butler. |
+| `RUSCHOLAR_GPU_LAYERS` | `-1` | Слои модели на GPU (-1 для максимума, 0 для CPU). |
+| `RUSCHOLAR_HOST` | `0.0.0.0` | Хост для запуска backend API. |
+| `RUSCHOLAR_PORT` | `8000` | Порт для запуска backend API. |
+
+---
+
+### 🧪 Тестирование
+
+Запуск тестов:
+
+```bash
+pytest -v
+```
+
+---
+
+### 📝 GitHub Релиз & Инструкция по упаковке
+
+Перед отправкой изменений в Git:
+*   **Исключенные файлы**: GGUF-модели (`models/*.gguf`), node_modules (`frontend/node_modules/`), сборка фронтенда (`frontend/dist/`), кэш тестов (`.pytest_cache/`, `scratch/`) и venv (`.venv/`) корректно прописаны в `.gitignore` и не попадут в репозиторий.
+*   **Файлы импорта**: Убедитесь, что все файлы `__init__.py` в папках `services/`, `mcp_server/`, `backend/` и `tests/` отслеживаются Git, чтобы избежать ошибок `ModuleNotFoundError` у конечных пользователей.
+
+---
+
+### 🤝 Лицензия
+
+Проект распространяется под свободной лицензией **MIT License**.
+
+---
+
+---
+
+## English
+### 📸 Web UI Cockpit
 
 Below is the visual dashboard showing the hybrid diagnostics workflow in action:
 
@@ -25,7 +442,7 @@ Below is the visual dashboard showing the hybrid diagnostics workflow in action:
 
 ---
 
-## 🌟 Key Features
+### 🌟 Key Features
 
 *   **No Black-Box AI Scores**: Avoids the "AI detection score" trap. Instead of a single arbitrary percentage, the system produces transparent risk indices, grammar statistics, and verifiable citation evidence.
 *   **Russian-Specific Rhetoric Heuristics**: Custom-tailored rules analyzing nominalization (noun/verb ratio), passive voice bloat, long genitive chains (noun stacking), missing predicate verbs, and translationese patterns typical of Russian academic prose.
@@ -36,7 +453,7 @@ Below is the visual dashboard showing the hybrid diagnostics workflow in action:
 
 ---
 
-## 🧠 Upstream Skill Relationship
+### 🧠 Upstream Skill Relationship
 
 RuScholar Studio is the engineering and visualization runtime built on top of the **PhD Thesis Butler** (`phd-thesis-butler`) custom agent skill.
 
@@ -58,14 +475,14 @@ RuScholar Studio is the engineering and visualization runtime built on top of th
 | Dimension | PhD Thesis Butler Skill | RuScholar Studio |
 | :--- | :--- | :--- |
 | **Role** | AI assistant writing skill | Runnable, deployable audit desktop workspace |
-| **Core Asset** | 16,722 templates across 5 academic clusters | Diagnostic server, Web UI, MCP server, report generator |
-| **Tasks** | Outlining, writing templates, rhetoric suggestions | Style risk checking, PPL estimation, NLI audit, RAG |
-| **How it runs** | Loaded by Codex/Hermes/Claude agent | Run as a FastAPI/React application or stdio service |
+| **Core assets** | 16,722 Russian-first templates from 2,118 dissertations/abstracts across 5 discipline clusters | Diagnostic services, Web UI, MCP server, report export |
+| **Main tasks** | Outlining, writing templates, rhetoric suggestions | Style risk detection, PPL probing, citation integrity, RAG |
+| **Runtime** | Loaded as a skill inside Codex/Hermes/Claude-like assistants | Runs as a local FastAPI/React app or MCP Server |
 | **Relationship** | Upstream knowledge base & writing paradigm | Downstream execution framework & verification layer |
 
 ---
 
-## 🛠️ System Requirements
+### 🛠️ System Requirements
 
 | Resource | Minimum | Recommended |
 | :--- | :--- | :--- |
@@ -77,9 +494,9 @@ RuScholar Studio is the engineering and visualization runtime built on top of th
 
 ---
 
-## 🚀 Quick Start
+### 🚀 Quick Start
 
-### 1. Installation
+#### 1. Installation
 
 Clone the repository and run the setup script:
 
@@ -99,7 +516,7 @@ chmod +x setup.sh
 ```
 *   To download the model: `.\setup.ps1 -DownloadModel`
 
-### 2. Local Model Setup
+#### 2. Local Model Setup
 
 To use the `local` or `hybrid` modes offline, the system utilizes the **Qwen3-4B-Q5_K_M GGUF** model (approx. 2.7 GB). By default, it looks for the model file at:
 ```
@@ -114,7 +531,7 @@ python -c "from naturalization_layer.model_downloader import download_model; fro
 
 ---
 
-## 💻 Running the Web UI
+### 💻 Running the Web UI
 
 To start the single-port integrated server (where FastAPI hosts the pre-built React frontend):
 
@@ -124,7 +541,7 @@ python backend/main.py
 ```
 Open **`http://localhost:8000`** in your browser.
 
-### Development Mode (with Hot Reload)
+#### Development Mode (with Hot Reload)
 If you want to modify the React frontend:
 ```bash
 # Terminal 1: Starts Backend API
@@ -139,11 +556,11 @@ Open the dev server port printed in the terminal (usually `http://localhost:5173
 
 ---
 
-## 🔌 MCP Integration
+### 🔌 MCP Integration
 
 To let AI clients (like Claude Desktop, Claude Code, or Cursor) audit your documents and bibliography directly:
 
-### 1. Claude Desktop
+#### 1. Claude Desktop
 Add the server config to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
@@ -157,13 +574,13 @@ Add the server config to `~/Library/Application Support/Claude/claude_desktop_co
 }
 ```
 
-### 2. Claude Code
+#### 2. Claude Code
 Run the following command:
 ```bash
 claude mcp add ruscholar-studio python -m mcp_server.server --cwd "<YOUR_CLONE_PATH>/RuScholar-Studio"
 ```
 
-### Available Tools:
+#### Available Tools:
 1.  `analyze_manuscript`: Audits style, translationese, and perplexity (PPL) of paragraphs.
 2.  `audit_citations`: Cross-checks in-text brackets citations against the bibliography.
 3.  `retrieve_evidence`: Search snippets from local PDF/BibTeX caches or OpenAlex.
@@ -177,7 +594,7 @@ claude mcp add ruscholar-studio python -m mcp_server.server --cwd "<YOUR_CLONE_P
 
 ---
 
-## ⚙️ Configuration Variables
+### ⚙️ Configuration Variables
 
 Create a `.env` file in the root directory by copying `.env.example`:
 ```bash
@@ -197,7 +614,7 @@ cp .env.example .env
 
 ---
 
-## 🧪 Testing
+### 🧪 Testing
 
 Run the full automated test suite to verify services, RAG retrievers, and MCP stdio interfaces:
 
@@ -207,7 +624,7 @@ pytest -v
 
 ---
 
-## 📝 GitHub Release & Packaging Guide
+### 📝 GitHub Release & Packaging Guide
 
 When packaging and preparing a release to GitHub, ensure that heavy binary assets are ignored via git:
 
@@ -216,7 +633,9 @@ When packaging and preparing a release to GitHub, ensure that heavy binary asset
 
 ---
 
-## 🤝 Contribution & License
+### 🤝 Contribution & License
 
 Contributions, issues, and feature requests are welcome. Feel free to open a pull request.
 This project is licensed under the **MIT License**.
+
+---
