@@ -437,5 +437,117 @@ def test_mcp_route_workflow():
         
     asyncio.run(run())
 
+def test_mcp_map_vak_specialty():
+    import asyncio
+    from mcp_server.server import thesis_map_vak_specialty
+    
+    async def run():
+        res = await thesis_map_vak_specialty(
+            topic="Системный анализ и управление обработкой информации",
+            abstract="В данной работе разрабатываются новые методы системного анализа алгоритмов принятия решений.",
+            keywords="системный анализ, управление"
+        )
+        assert res["findings"]["code"] == "2.3.1"
+        assert "confidence" in res["findings"]
+        assert len(res["findings"]["gost_structure"]) > 0
+        assert "thesis_analyze_manuscript" in res["next_actions"]
+        
+    asyncio.run(run())
+
+def test_mcp_granular_citation_tools():
+    import asyncio
+    from mcp_server.server import (
+        thesis_extract_claims,
+        thesis_classify_evidence_need,
+        thesis_bind_evidence,
+        thesis_judge_claim_evidence_nli
+    )
+    
+    async def run():
+        # 1. Extract claims
+        text = "Это тестовое предложение. В работе предложен новый метод [1]. Актуальность темы очевидна."
+        res_extract = thesis_extract_claims(text)
+        assert len(res_extract["findings"]) == 3
+        assert res_extract["findings"][1]["claim_type"] == "cited_assertion"
+        assert res_extract["findings"][1]["citation_keys"] == ["1"]
+        
+        # 2. Classify evidence need
+        res_need1 = thesis_classify_evidence_need("В работе предложен новый метод")
+        assert res_need1["findings"]["need_level"] == "medium"
+        
+        res_need2 = thesis_classify_evidence_need("Актуальность темы очевидна")
+        assert res_need2["findings"]["need_level"] == "low"
+        
+        # 3. Bind evidence (using a session without references, should bind empty but succeed)
+        res_bind = await thesis_bind_evidence(
+            claim="В работе предложен новый метод",
+            references=["1"],
+            session_id="test_session_granular"
+        )
+        assert len(res_bind["findings"]) == 1
+        assert res_bind["findings"][0]["citation_key"] == "1"
+        assert res_bind["findings"][0]["source"] == "unknown"
+        
+        # 4. Judge NLI (mocked or empty snippets fallback)
+        res_nli = await thesis_judge_claim_evidence_nli(
+            claim="В работе предложен новый метод",
+            snippets=[]
+        )
+        assert res_nli["findings"]["status"] == "NOT_ENOUGH_INFO"
+        
+    asyncio.run(run())
+
+@patch("mcp_server.server.get_engines")
+def test_mcp_audit_vak_gost_compliance(mock_get_engines):
+    import asyncio
+    from mcp_server.server import thesis_audit_vak_gost_compliance
+    
+    # Force get_engines to return None to prevent actual local model load in tests
+    mock_get_engines.return_value = (None, None, None)
+    
+    async def run():
+        # Introduction with some missing VAK headers
+        manuscript = """
+        Введение
+        Актуальность темы исследования обусловлена необходимостью автоматизации.
+        Научная новизна результатов заключается в разработке новых алгоритмов.
+        Положения, выносимые на защиту:
+        1. Метод управления...
+        Список литературы
+        [1] Иванов И.И. Алгоритмы оптимизации // Вестник компьютерных технологий. 2022. Т. 5, № 2. С. 10–15.
+        [2] Петров П.П. Моделирование систем.
+        """
+        
+        res = await thesis_audit_vak_gost_compliance(
+            manuscript=manuscript,
+            vak_code="2.3.1"
+        )
+        
+        findings = res["findings"]
+        # Relevance is present
+        assert findings["vak_structure_audit"]["relevance"]["status"] == "passed"
+        # Goal/tasks is missing
+        assert findings["vak_structure_audit"]["goal_tasks"]["status"] == "missing"
+        assert "研究目标与任务 (Цель и задачи)" in findings["missing_vak_headers"]
+        
+        # Bibliography GOST score audit
+        assert len(findings["bibliography_gost_audit"]) == 2
+        # First one is correct (score 100), second one is missing elements (score 50)
+        assert findings["bibliography_gost_audit"][0]["score"] == 100
+        assert findings["bibliography_gost_audit"][1]["score"] == 50
+        assert findings["average_gost_score"] == 75.0
+        
+        # Citation integrity
+        assert findings["citation_integrity"]["has_bibliography"] is True
+        
+        # VAK code requirements
+        assert findings["vak_code_requirements"]["vak_code"] == "2.3.1"
+        assert findings["vak_code_requirements"]["min_publications"] == 3
+        assert "3" in findings["vak_code_requirements"]["publication_warning"]
+        
+    asyncio.run(run())
+
+
+
 
 
