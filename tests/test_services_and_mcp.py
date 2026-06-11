@@ -195,13 +195,14 @@ def test_mcp_stdio_jsonrpc():
         tools = list_resp["result"]["tools"]
         tool_names = [t["name"] for t in tools]
         
-        assert "analyze_manuscript" in tool_names
-        assert "audit_citations" in tool_names
-        assert "retrieve_evidence" in tool_names
-        assert "suggest_revision" in tool_names
-        assert "export_report" in tool_names
-        assert "check_model_installed" in tool_names
-        assert "download_model_tool" in tool_names
+        assert "thesis_analyze_manuscript" in tool_names
+        assert "thesis_audit_citations" in tool_names
+        assert "thesis_retrieve_evidence" in tool_names
+        assert "thesis_suggest_revision" in tool_names
+        assert "thesis_export_report" in tool_names
+        assert "thesis_check_model_installed" in tool_names
+        assert "thesis_download_model_tool" in tool_names
+        assert "thesis_route_workflow" in tool_names
     finally:
         proc.terminate()
         proc.wait()
@@ -408,5 +409,33 @@ def test_mcp_e2e_references_flow():
     finally:
         if os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir)
+
+def test_mcp_route_workflow():
+    import asyncio
+    from mcp_server.server import thesis_route_workflow
+    
+    async def run():
+        # Case 1: Citation audit routing
+        res = await thesis_route_workflow("Please check if references [1] and [2] in my paper are consistent and verify them using NLI")
+        assert res["findings"]["workflow"] == "citation_audit"
+        assert "thesis_audit_citations" in res["next_actions"]
+        
+        # Case 2: Literature review / Landscape routing
+        res2 = await thesis_route_workflow("I want to search for similar dissertations from eLIBRARY or Zotero and construct a landscape report")
+        assert res2["findings"]["workflow"] == "literature_landscape"
+        assert "thesis_register_references" in res2["next_actions"]
+        
+        # Case 3: Structure planning routing
+        res3 = await thesis_route_workflow("Help me draft an outline and plan the methodology chapters for my VAK thesis")
+        assert res3["findings"]["workflow"] == "planning_and_structure"
+        assert "thesis_map_vak_specialty" in res3["next_actions"]
+        
+        # Case 4: Polishing routing
+        res4 = await thesis_route_workflow("Polish this sentence: В работе рассматривается метод управления...")
+        assert res4["findings"]["workflow"] == "polishing_and_style"
+        assert "thesis_analyze_manuscript" in res4["next_actions"]
+        
+    asyncio.run(run())
+
 
 
