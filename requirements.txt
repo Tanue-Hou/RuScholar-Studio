@@ -11,3 +11,5 @@ uvicorn>=0.23.0
 python-multipart>=0.0.6
 sse-starlette>=1.6.5
 mcp>=1.0.0
+pymorphy3>=2.1
+

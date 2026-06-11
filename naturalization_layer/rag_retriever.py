@@ -110,9 +110,10 @@ class BM25Retriever:
         self.doc_tfs = [Counter(tokens) for tokens in self.doc_tokens]
         
     def _tokenize(self, text: str) -> list[str]:
-        # Lowercase, find all alphanumeric words, and apply Russian light stemmer
+        # Lowercase, find all alphanumeric words, and apply Russian morphological lemmatizer
+        from naturalization_layer.russian_lemmatizer import lemmatize_word
         words = re.findall(r'[a-zA-Z0-9а-яА-ЯёЁ]+', text.lower())
-        return [stem_russian_word(w) for w in words]
+        return [lemmatize_word(w) for w in words]
         
     def _idf(self, word: str) -> float:
         df = self.df.get(word, 0)
@@ -178,6 +179,7 @@ def check_title_similarity(query_str: str, retrieved_title: str) -> float:
     Check if the retrieved title core words overlap sufficiently with the query string.
     """
     import re
+    from naturalization_layer.russian_lemmatizer import lemmatize_word
     def get_words(text: str) -> set[str]:
         words = re.findall(r'[a-zA-Z0-9а-яА-ЯёЁ]{3,}', text.lower())
         stopwords = {
@@ -185,7 +187,7 @@ def check_title_similarity(query_str: str, retrieved_title: str) -> float:
             'arxiv', 'preprint', 'volume', 'issue', 'pages', 'editorial', 'letter',
             'analysis', 'study', 'research', 'paper', 'method', 'methods', 'using', 'based'
         }
-        return set(w for w in words if w not in stopwords)
+        return set(lemmatize_word(w) for w in words if w not in stopwords)
 
     query_words = get_words(query_str)
     title_words = get_words(retrieved_title)
