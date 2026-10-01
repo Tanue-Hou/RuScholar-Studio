@@ -16,8 +16,8 @@ def extract_text(docx_path, out_path):
         return False
 
 def main():
-    file1 = "/Users/tanue/Library/CloudStorage/OneDrive-个人/1科研工作/投稿/基于路面附着系数评估的未知情况下车辆状态评估/5.15学术会议/ОЦЕНКА КОЭФФИЦИЕНТА СЦЕПЛЕНИЯ ДОРОЖНОГО ПОКРЫТИЯ НА ОСНОВЕ АДАПТИВНОГО РАСШИРЕННОГО НАБЛЮДАТЕЛЯ С ИСПОЛЬЗОВАНИЕМ РЕКУРЕНТНОЙ НЕЙРОННОЙ СЕТИ.docx"
-    file2 = "/Users/tanue/Desktop/Координированное модельно.docx"
+    file1 = sys.argv[1] if len(sys.argv) > 1 else os.getenv("TEST_DOCX_FILE_1", "examples/manuscript_sample_1.docx")
+    file2 = sys.argv[2] if len(sys.argv) > 2 else os.getenv("TEST_DOCX_FILE_2", "examples/manuscript_sample_2.docx")
     
     out1 = "scratch/test1_ai_assisted.txt"
     out2 = "scratch/test2_pure_ai.txt"

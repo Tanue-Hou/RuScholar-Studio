@@ -30,7 +30,7 @@ def test_detect_discipline_engine_mapping_cloud_flash():
         assert res == "SCI_TECH"
         mock_api.assert_called_once()
         args, kwargs = mock_api.call_args
-        assert args[0] == "deepseek-v4-flash"
+        assert args[0] == "deepseek-flash"
 
 def test_detect_discipline_local_prompt_and_tokens():
     mock_llm = MagicMock()

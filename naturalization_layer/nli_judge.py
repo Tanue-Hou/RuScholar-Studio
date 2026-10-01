@@ -1,4 +1,7 @@
-from llama_cpp import Llama
+try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
 import json
 import urllib.request
 import re
@@ -28,7 +31,7 @@ class NLICitationJudge:
         if "pro" in engine_type:
             api_engine = "deepseek-v4-pro"
         elif "flash" in engine_type:
-            api_engine = "deepseek-v4-flash"
+            api_engine = "deepseek-flash"
 
         sys_prompt = """You are an academic citation auditor. Your task is to verify if a given claim (sentence) from a research paper is logically supported by the provided snippets retrieved from the cited reference.
 You must classify the relationship into exactly one of three categories:
@@ -52,7 +55,7 @@ Retrieved Reference Snippets:
 
         raw_text = ""
         try:
-            if api_engine in ("deepseek-v4-pro", "deepseek-v4-flash"):
+            if api_engine in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
                 raw_text = self._call_deepseek_api(api_engine, api_key, base_url, sys_prompt, user_prompt)
             else:
                 # Local GGUF mode

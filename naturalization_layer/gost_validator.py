@@ -88,7 +88,7 @@ async def check_gost_compliance(
     use_llm = False
     if llm is not None:
         use_llm = True
-    elif engine_type in ("deepseek-v4-pro", "deepseek-v4-flash") and api_key:
+    elif engine_type in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash") and api_key:
         use_llm = True
         
     if not use_llm:
@@ -116,7 +116,7 @@ You MUST reply strictly in JSON format (no markdown blocks, no think tag in outp
     
     try:
         raw_text = ""
-        if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash"):
+        if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
             from naturalization_layer.llm_judge import StyleJudge
             judge = StyleJudge(None)
             raw_text = judge._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, user_prompt)

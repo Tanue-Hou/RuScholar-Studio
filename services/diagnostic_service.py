@@ -406,7 +406,7 @@ async def run_sentence_diagnose_stream(
                         )
                         ppl_val = round(ppl_val, 2) if ppl_val else None
 
-                actual_cloud_model = "deepseek-v4-flash" if "flash" in engine_type else "deepseek-v4-pro"
+                actual_cloud_model = "deepseek-flash" if "flash" in engine_type else "deepseek-v4-pro"
 
                 diag = await asyncio.to_thread(
                     judge_inst.diagnose_sentence, 

@@ -1,10 +1,15 @@
-from llama_cpp import Llama
+try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
 import math
 import os
 from typing import Optional
 
 class PPLEngine:
     def __init__(self, model_path: str, n_gpu_layers: Optional[int] = None):
+        if Llama is None:
+            raise RuntimeError("llama-cpp-python is not installed. PPLEngine disabled.")
         if n_gpu_layers is None:
             n_gpu_layers = int(os.getenv("RUSCHOLAR_GPU_LAYERS", "-1"))
 

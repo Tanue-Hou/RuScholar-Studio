@@ -1,3 +1,4 @@
+import os
 import re
 import math
 from collections import Counter
@@ -228,8 +229,9 @@ def fetch_openalex_abstract(query_str: str, api_key: str = "") -> dict:
     query_string = urllib.parse.urlencode(params)
     url = f"{base_url}?{query_string}"
     
+    user_email = os.getenv("OPENALEX_USER_EMAIL", "scholar-audit@users.noreply.github.com")
     headers = {
-        "User-Agent": "ThesisButlerCitationAudit/1.0 (mailto:tanue.writing@gmail.com)"
+        "User-Agent": f"RuScholarStudioCitationAudit/1.0 (mailto:{user_email})"
     }
     
     try:

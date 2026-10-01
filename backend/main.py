@@ -39,9 +39,12 @@ async def lifespan(app: FastAPI):
     global engine, judge, global_clusters, calibration_db
     print("Loading Llama model...")
     if os.path.exists(MODEL_PATH):
-        engine = PPLEngine(MODEL_PATH)
-        judge = StyleJudge(engine.llm)
-        print("Model loaded successfully.")
+        try:
+            engine = PPLEngine(MODEL_PATH)
+            judge = StyleJudge(engine.llm)
+            print("Model loaded successfully.")
+        except Exception as e:
+            print(f"Llama model engine unavailable ({e}). Running in Heuristics-only mode.")
     else:
         print(f"Model not found at {MODEL_PATH}. Running in Heuristics-only mode.")
         
@@ -221,7 +224,7 @@ async def detect_discipline_endpoint(req: DetectDisciplineRequest):
     use_cloud = bool(req.api_key and req.api_key.strip())
     
     if use_cloud:
-        actual_engine = "deepseek-v4-flash" if "flash" in req.engine_type else "deepseek-v4-pro"
+        actual_engine = "deepseek-flash" if "flash" in req.engine_type else "deepseek-v4-pro"
         judge_inst = StyleJudge(None)
     else:
         actual_engine = "local"
@@ -318,7 +321,11 @@ async def diagnose_stream(session_id: str):
     engine_inst = None
     if os.path.exists(MODEL_PATH):
         if engine is None:
-            engine = PPLEngine(MODEL_PATH)
+            try:
+                engine = PPLEngine(MODEL_PATH)
+            except Exception as e:
+                print(f"Failed to load PPLEngine: {e}")
+                engine = None
         engine_inst = engine
         
     if engine_type == "local":
@@ -327,12 +334,8 @@ async def diagnose_stream(session_id: str):
                 judge = StyleJudge(engine_inst.llm)
             judge_inst = judge
         else:
-            async def error_generator():
-                yield {
-                    "event": "error",
-                    "data": json.dumps({"error": "Local model not found. Please download it first."})
-                }
-            return EventSourceResponse(error_generator())
+            print("Local GGUF model unavailable, falling back to Heuristic mode.")
+            judge_inst = StyleJudge(None)
     else:
         judge_inst = StyleJudge(None)
         

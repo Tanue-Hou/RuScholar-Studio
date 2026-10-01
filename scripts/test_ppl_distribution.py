@@ -8,8 +8,9 @@ from naturalization_layer.ppl_engine import PPLEngine
 from naturalization_layer.rules_engine import analyze_text_rules
 
 def main():
-    docx_path = "/Users/tanue/Library/Group Containers/UBF8T346G9.OneDriveSyncClientSuite/OneDrive.noindex/OneDrive/1科研工作/投稿/基于路面附着系数评估的未知情况下车辆状态评估/5.15学术会议/ОЦЕНКА КОЭФФИЦИЕНТА СЦЕПЛЕНИЯ ДОРОЖНОГО ПОКРЫТИЯ НА ОСНОВЕ АДАПТИВНОГО РАСШИРЕННОГО НАБЛЮДАТЕЛЯ С ИСПОЛЬЗОВАНИЕМ РЕКУРЕНТНОЙ НЕЙРОННОЙ СЕТИ.docx"
-    model_path = "models/Qwen3-4B-Q5_K_M.gguf"
+    docx_path = sys.argv[1] if len(sys.argv) > 1 else os.getenv("TEST_DOCX_FILE", "examples/manuscript_sample.docx")
+    from services.shared_state import MODEL_PATH
+    model_path = MODEL_PATH
     
     print(f"Reading document: {docx_path}")
     try:

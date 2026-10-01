@@ -1,5 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, AlertCircle, LayoutDashboard, Sun, Moon } from 'lucide-react';
+import { 
+  Upload, 
+  FileText, 
+  AlertCircle, 
+  Sun, 
+  Moon, 
+  Sparkles, 
+  Cpu, 
+  CheckCircle2, 
+  Play, 
+  Square, 
+  Copy, 
+  Check, 
+  BookOpen, 
+  RotateCcw,
+  Compass,
+  Layers,
+  ChevronRight,
+  ExternalLink,
+  ShieldCheck,
+  Zap,
+  Activity,
+  AlertTriangle
+} from 'lucide-react';
 import './index.css';
 
 interface DiagnosticResult {
@@ -47,24 +70,24 @@ interface SentenceItem {
   } | null;
 }
 
-const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string }> = {
-  SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学⟣工程技术)", color: "var(--apple-blue-text)" },
-  AUTOMATION_CONTROL: { en: "Automation & Control Engineering", zh: "自动化与控制工程", color: "var(--apple-orange-text)" },
-  AGRI_MED: { en: "Agricultural & Medical Sciences", zh: "农田与医药生命科学", color: "var(--apple-green-text)" },
-  HUM_POL_ECON: { en: "Humanities & Social Sciences", zh: "人文社科 (政治经济与社会科学)", color: "var(--apple-purple-text)" },
-  ARTS_SPORTS: { en: "Arts, Sports & Culture", zh: "艺术体育与文化研究", color: "var(--apple-pink-text)" },
-  UNIVERSAL: { en: "Universal Academic Domain", zh: "通用学术与跨学科领域", color: "var(--text-secondary)" }
+const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string; icon: any }> = {
+  SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学与工程技术)", color: "var(--accent-cyan)", icon: Cpu },
+  AUTOMATION_CONTROL: { en: "Automation & Control Engineering", zh: "自动化与控制工程", color: "var(--accent-amber)", icon: Compass },
+  AGRI_MED: { en: "Agricultural & Medical Sciences", zh: "农田与医药生命科学", color: "var(--accent-emerald)", icon: ShieldCheck },
+  HUM_POL_ECON: { en: "Humanities & Social Sciences", zh: "人文社科 (政治经济与社会科学)", color: "var(--accent-indigo)", icon: BookOpen },
+  ARTS_SPORTS: { en: "Arts, Sports & Culture", zh: "艺术体育与文化研究", color: "var(--accent-pink)", icon: Sparkles },
+  UNIVERSAL: { en: "Universal Academic Domain", zh: "通用学术与跨学科领域", color: "var(--text-secondary)", icon: Layers }
 };
 
-const ISSUE_TITLE_MAP: Record<string, { title: string; color: string }> = {
-  ai_generated_suspicion: { title: "AI 生成特征预警 (AI Writing Detected)", color: "var(--apple-red-text)" },
-  machine_translation_cliche: { title: "机器翻译与学术套话 (Translationese & Cliché)", color: "var(--apple-orange-text)" },
-  citation_gap: { title: "引用支撑不足 (Citation Gap Alert)", color: "var(--apple-orange-text)" },
-  citation_contradiction: { title: "文献论点冲突 (Citation Contradiction)", color: "var(--apple-red-text)" },
-  semantic_plagiarism_risk: { title: "学术改写重合风险 (High Similarity Risk)", color: "var(--apple-orange-text)" },
-  style_heavy: { title: "句式臃肿与冗余 (Style Overloaded)", color: "var(--apple-purple-text)" },
-  json_parse_error: { title: "格式解析异常 (Formatting Parse Alert)", color: "var(--text-secondary)" },
-  api_request_error: { title: "云端服务连接异常 (API Connection Alert)", color: "var(--text-secondary)" },
+const ISSUE_TITLE_MAP: Record<string, { title: string; color: string; bg: string }> = {
+  ai_generated_suspicion: { title: "AI 生成特征预警 (AI Writing Pattern)", color: "var(--accent-rose)", bg: "var(--accent-rose-bg)" },
+  machine_translation_cliche: { title: "机器翻译与学术套话 (Translationese & Cliché)", color: "var(--accent-amber)", bg: "var(--accent-amber-bg)" },
+  citation_gap: { title: "文献引用支撑不足 (Citation Gap Alert)", color: "var(--accent-amber)", bg: "var(--accent-amber-bg)" },
+  citation_contradiction: { title: "文献论点冲突 (Citation Contradiction)", color: "var(--accent-rose)", bg: "var(--accent-rose-bg)" },
+  semantic_plagiarism_risk: { title: "学术改写重合风险 (High Similarity Risk)", color: "var(--accent-amber)", bg: "var(--accent-amber-bg)" },
+  style_heavy: { title: "句式臃肿与冗余 (Syntactic Overload)", color: "var(--accent-violet)", bg: "var(--accent-violet-bg)" },
+  json_parse_error: { title: "格式解析异常 (Formatting Parse Alert)", color: "var(--text-secondary)", bg: "rgba(255,255,255,0.05)" },
+  api_request_error: { title: "云端服务连接异常 (API Connection Alert)", color: "var(--text-secondary)", bg: "rgba(255,255,255,0.05)" },
 };
 
 function App() {
@@ -76,6 +99,7 @@ function App() {
   const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   
   const sentenceRefs = useRef<(HTMLSpanElement | null)[]>([]);
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -122,6 +146,12 @@ function App() {
       .catch(() => setLocalModelStatus('missing'));
   }, []);
 
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
+  };
+
   const downloadLocalModel = () => {
     setLocalModelStatus('downloading');
     setDownloadProgress(0);
@@ -146,13 +176,11 @@ function App() {
     };
   };
 
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const uploadedFile = e.target.files[0];
       setFile(uploadedFile);
       
-      // Upload to backend to parse
       const formData = new FormData();
       formData.append("file", uploadedFile);
       
@@ -182,7 +210,7 @@ function App() {
     if (!documentText) return;
 
     if ((engineType === 'local' || engineType.startsWith('hybrid')) && localModelStatus === 'missing') {
-      alert("本地大模型尚未就绪。请先在顶栏点击 'Download Local Model' 下载并初始化大模型，或者切换到纯云端 Cloud 引擎。");
+      alert("本地大模型尚未就绪。请先在顶栏点击 '下载本地模型'，或者切换至云端 Cloud 引擎。");
       return;
     }
     
@@ -214,7 +242,6 @@ function App() {
       setDiscipline('UNIVERSAL');
     }
 
-    // Register session via POST to protect sensitive details and api keys
     let sessionId: string;
     try {
       const sessionRes = await fetch("/api/session", {
@@ -232,12 +259,11 @@ function App() {
       sessionId = sessionData.session_id;
     } catch (err) {
       console.error("Failed to register analysis session", err);
-      alert("Failed to initialize secure session.");
+      alert("初始化质检会话失败，请检查网络或后端状态。");
       setIsAnalyzing(false);
       return;
     }
 
-    // Upload references if any are selected
     if (bibtexFile || referenceFiles.length > 0) {
       setReferencesUploadStatus('uploading');
       const refFormData = new FormData();
@@ -266,20 +292,17 @@ function App() {
       } catch (err) {
         console.error("Failed to upload references", err);
         setReferencesUploadStatus('error');
-        alert("Failed to upload references. The system will automatically fallback to online retrieval.");
       }
     } else {
       setReferencesUploadStatus('idle');
     }
 
-    // Connect to SSE using session_id
     const eventSource = new EventSource(`/api/diagnose?session_id=${sessionId}`);
     eventSourceRef.current = eventSource;
     
     eventSource.addEventListener("init", (e) => {
       const data = JSON.parse(e.data);
       setProgress({ current: 0, total: data.total_sentences });
-      // Initialize sentence array placeholder
       setSentences(Array(data.total_sentences).fill({ text: '', status: 'analyzing' }));
     });
     
@@ -321,7 +344,6 @@ function App() {
         setAllDiagnostics(prev => ({ ...prev, [data.index]: data }));
       }
       
-      // Update running style risks calculated strictly on the backend
       setRunningRisks({
         predictability: Math.round(data.predictability_risk || 0),
         uniformity: Math.round(data.uniformity_risk || 0),
@@ -355,9 +377,9 @@ function App() {
       const errEvent = e as MessageEvent;
       try {
         const data = JSON.parse(errEvent.data);
-        alert("Analysis Error: " + (data.error || data.message || "Unknown error"));
+        alert("质检流程异常: " + (data.error || data.message || "Unknown error"));
       } catch {
-        alert("Analysis Error occurred.");
+        // Handled silently
       }
       setIsAnalyzing(false);
       eventSource.close();
@@ -365,39 +387,49 @@ function App() {
     });
     
     eventSource.onerror = () => {
-      console.error("SSE Error");
       setIsAnalyzing(false);
       eventSource.close();
       eventSourceRef.current = null;
     };
   };
 
+  const scrollToSentence = (index: number) => {
+    setTimeout(() => {
+      if (index >= 0 && sentenceRefs.current[index]) {
+        sentenceRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 50);
+  };
+
   const renderIntegrityReport = () => (
     <div className="glass-card slide-in" style={{ 
       marginTop: '16px', 
-      borderLeft: '4px solid var(--apple-red-text)'
+      border: '1px solid rgba(244, 63, 94, 0.3)',
+      background: 'linear-gradient(180deg, rgba(244, 63, 94, 0.06) 0%, transparent 100%)'
     }}>
-      <div className="card-header" style={{ color: 'var(--apple-red-text)', marginBottom: '8px' }}>
-        <AlertCircle size={16} color="var(--apple-red-text)" />
-        <span style={{ fontWeight: 600 }}>参考文献规范与完整性报告 (Citation Integrity Report)</span>
+      <div className="card-header" style={{ color: 'var(--accent-rose)', marginBottom: '8px' }}>
+        <AlertTriangle size={16} />
+        <span>参考文献规范与完整性报告 (Citation Integrity)</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
         {integrityWarnings.map((w, idx) => (
           <div key={idx} style={{ 
-            background: 'var(--card-inner-bg)', 
-            borderRadius: '8px', 
-            padding: '10px 12px', 
-            fontSize: '13px' 
+            background: 'var(--bg-card-inner)', 
+            borderRadius: '10px', 
+            padding: '12px 14px', 
+            fontSize: '13px',
+            border: '1px solid var(--border-subtle)'
           }}>
             <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
               {w.text}
             </div>
-            <div style={{ color: 'var(--apple-orange-text)', marginBottom: '4px' }}>
+            <div style={{ color: 'var(--accent-amber)', marginBottom: '6px', fontSize: '12px' }}>
               {w.explanation}
             </div>
             {w.suggestion && w.suggestion !== '-' && (
-              <div style={{ color: 'var(--apple-green-text)', fontSize: '12px', fontWeight: 500 }}>
-                💡 建议: {w.suggestion}
+              <div style={{ color: 'var(--accent-emerald)', fontSize: '12px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={13} />
+                <span>建议: {w.suggestion}</span>
               </div>
             )}
           </div>
@@ -410,64 +442,68 @@ function App() {
     if (!diag.citation_audit || diag.citation_audit.length === 0) return null;
     
     return (
-      <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--glass-border)' }}>
-        <p className="text-secondary" style={{ marginBottom: '6px', fontSize: '11px', fontWeight: 600 }}>
-          引用与证据核验 (Citation Audit)
-        </p>
+      <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+          <ShieldCheck size={14} color="var(--accent-cyan)" />
+          <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-cyan)' }}>
+            引用支撑性核验 (Citation Evidence Audit)
+          </span>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {diag.citation_audit.map((audit, aIdx) => {
-            const badgeColor = audit.status === 'SUPPORTED' ? 'var(--apple-green-text)' 
-                             : audit.status === 'CONTRADICTED' ? 'var(--apple-red-text)' 
-                             : audit.status === 'AUDIT_FAILED' ? 'var(--text-tertiary)' 
-                             : 'var(--apple-orange-text)';
-            const badgeBg = audit.status === 'SUPPORTED' ? 'rgba(52, 199, 89, 0.1)' 
-                           : audit.status === 'CONTRADICTED' ? 'rgba(255, 69, 58, 0.1)' 
-                           : audit.status === 'AUDIT_FAILED' ? 'rgba(142, 142, 147, 0.1)' 
-                           : 'rgba(255, 159, 10, 0.1)';
-            const statusText = audit.status === 'SUPPORTED' ? '完全支持' 
-                             : audit.status === 'CONTRADICTED' ? '论点矛盾' 
-                             : audit.status === 'AUDIT_FAILED' ? '审计未完成' 
-                             : '支持度不足/弱引用';
-            const sourceText = audit.source === 'local' ? '本地全文库' : '在线文献摘要';
-            const sourceBg = audit.source === 'local' ? 'rgba(0, 122, 255, 0.1)' : 'rgba(120, 86, 214, 0.1)';
-            const sourceColor = audit.source === 'local' ? 'var(--apple-blue-text)' : 'var(--apple-purple-text)';
+            const isSupported = audit.status === 'SUPPORTED';
+            const isContradicted = audit.status === 'CONTRADICTED';
+            const badgeColor = isSupported ? 'var(--accent-emerald)' 
+                             : isContradicted ? 'var(--accent-rose)' 
+                             : 'var(--accent-amber)';
+            const badgeBg = isSupported ? 'var(--accent-emerald-bg)' 
+                           : isContradicted ? 'var(--accent-rose-bg)' 
+                           : 'var(--accent-amber-bg)';
+            const statusText = isSupported ? '完全支持 (Supported)' 
+                             : isContradicted ? '论点矛盾 (Contradicted)' 
+                             : audit.status === 'AUDIT_FAILED' ? '审计未竟' 
+                             : '证据支撑偏弱';
+            const sourceText = audit.source === 'local' ? '本地文献全文' : 'OpenAlex 实时摘要';
+            const sourceColor = audit.source === 'local' ? 'var(--accent-cyan)' : 'var(--accent-indigo)';
+            const sourceBg = audit.source === 'local' ? 'var(--accent-cyan-bg)' : 'var(--accent-indigo-bg)';
             
             return (
               <div 
                 key={aIdx} 
                 style={{ 
-                  padding: '8px 10px', 
-                  borderRadius: '6px', 
-                  backgroundColor: 'rgba(255, 255, 255, 0.02)', 
-                  border: '1px solid var(--glass-border)', 
+                  padding: '10px 12px', 
+                  borderRadius: '8px', 
+                  backgroundColor: 'var(--bg-card-inner)', 
+                  border: '1px solid var(--border-subtle)', 
                   fontSize: '12px' 
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                    [{audit.key}] {audit.title.substring(0, 45)}{audit.title.length > 45 ? '...' : ''}
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                    [{audit.key}] {audit.title.substring(0, 42)}{audit.title.length > 42 ? '...' : ''}
                   </span>
                   <div style={{ display: 'flex', gap: '6px' }}>
-                    <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 600, color: sourceColor, backgroundColor: sourceBg }}>
+                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', fontWeight: 600, color: sourceColor, backgroundColor: sourceBg, border: `1px solid ${sourceBg}` }}>
                       {sourceText}
                     </span>
-                    <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', fontWeight: 600, color: badgeColor, backgroundColor: badgeBg }}>
+                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', fontWeight: 600, color: badgeColor, backgroundColor: badgeBg, border: `1px solid ${badgeBg}` }}>
                       {statusText}
                     </span>
                   </div>
                 </div>
                 
-                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.4', marginBottom: '6px' }}>
-                  <strong>核验分析:</strong> {audit.explanation_zh}
+                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.45', marginBottom: '6px' }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>核验结论:</strong> {audit.explanation_zh}
                 </p>
                 
                 {audit.evidence_snippet && (
                   <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                    <summary style={{ fontSize: '10px', color: 'var(--text-tertiary)', outline: 'none', userSelect: 'none' }}>
-                      ▶ 查看文献证据原文 (Evidence Snippet)
+                    <summary style={{ fontSize: '11px', color: 'var(--text-tertiary)', outline: 'none', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <ChevronRight size={12} />
+                      <span>查看引文证据原文 (Evidence Snippet)</span>
                     </summary>
-                    <p style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px', fontStyle: 'italic', padding: '6px', background: 'rgba(0,0,0,0.1)', borderRadius: '4px', whiteSpace: 'pre-wrap', lineHeight: '1.3' }}>
+                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic', padding: '8px 10px', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', border: '1px solid var(--border-subtle)', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
                       "{audit.evidence_snippet}"
                     </p>
                   </details>
@@ -480,47 +516,65 @@ function App() {
     );
   };
 
-  const scrollToSentence = (index: number) => {
-    setTimeout(() => {
-      if (index >= 0 && sentenceRefs.current[index]) {
-        sentenceRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    }, 50);
-  };
+  const DisciplineIcon = DISCIPLINE_MAP[discipline]?.icon || Layers;
 
   return (
     <div className="app-container">
-      {/* Header */}
+      {/* Top Floating Glass Header */}
       <header className="header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <LayoutDashboard size={24} color="var(--apple-orange)" />
-          <h1 style={{ fontSize: '20px', fontWeight: '600', letterSpacing: '-0.5px' }}>PhD Thesis Butler</h1>
-          <span style={{ color: 'var(--text-tertiary)', margin: '0 8px' }}>|</span>
-          <span style={{ color: 'var(--text-secondary)', fontSize: '15px' }}>Style Diagnostics</span>
-          <span style={{ 
-            backgroundColor: 'rgba(255, 69, 58, 0.1)', 
-            color: 'var(--apple-red-text)', 
-            padding: '2px 8px', 
-            borderRadius: '4px', 
-            fontSize: '11px', 
-            fontWeight: 600,
-            marginLeft: '8px'
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <div style={{ 
+            width: '36px', 
+            height: '36px', 
+            borderRadius: '10px', 
+            background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.2) 0%, rgba(99, 102, 241, 0.25) 100%)',
+            border: '1px solid var(--accent-cyan-glow)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 0 16px var(--accent-cyan-glow)'
           }}>
-            仅供参考 (Reference Only)
-          </span>
+            <Sparkles size={20} color="var(--accent-cyan)" />
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h1 style={{ fontSize: '17px', fontWeight: '700', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
+                RuScholar Studio
+              </h1>
+              <span style={{ 
+                backgroundColor: 'rgba(0, 229, 255, 0.1)', 
+                color: 'var(--accent-cyan)', 
+                padding: '2px 8px', 
+                borderRadius: '999px', 
+                fontSize: '10px', 
+                fontWeight: 700,
+                border: '1px solid rgba(0, 229, 255, 0.25)',
+                letterSpacing: '0.04em'
+              }}>
+                VAK / GOST 质检标准
+              </span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', letterSpacing: '-0.01em' }}>
+              俄联邦学位论文自然化润色与多维真伪性核验工作台
+            </div>
+          </div>
         </div>
+
         <div style={{ flex: 1 }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+
+        {/* Engine Controls & Cloud Key Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <select 
             value={engineType} 
             onChange={e => setEngineType(e.target.value)}
-            style={{ backgroundColor: 'var(--glass-bg)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '13px' }}
+            className="tech-select font-mono"
+            style={{ fontSize: '12px' }}
           >
-            <option value="local">Local: Qwen3-4B-GGUF</option>
+            <option value="local">Local: Qwen3-8B-GGUF (本地)</option>
             <option value="hybrid-pro">Hybrid: Local PPL + DeepSeek Pro</option>
-            <option value="hybrid-flash">Hybrid: Local PPL + DeepSeek Flash</option>
-            <option value="cloud-pro">Cloud: Pure DeepSeek Pro</option>
-            <option value="cloud-flash">Cloud: Pure DeepSeek Flash</option>
+            <option value="hybrid-flash">Hybrid: Local PPL + deepseek-flash</option>
+            <option value="cloud-pro">Cloud: Pure DeepSeek Pro (纯云端)</option>
+            <option value="deepseek-flash">Cloud: deepseek-flash (高速云端)</option>
           </select>
           
           {engineType !== 'local' && (
@@ -530,14 +584,16 @@ function App() {
                 placeholder="Base URL" 
                 value={baseUrl} 
                 onChange={e => setBaseUrl(e.target.value)}
-                style={{ backgroundColor: 'var(--glass-bg)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', width: '180px' }}
+                className="tech-input font-mono"
+                style={{ width: '170px', fontSize: '12px' }}
               />
               <input 
                 type="password" 
                 placeholder="API Key" 
                 value={apiKey} 
                 onChange={e => setApiKey(e.target.value)}
-                style={{ backgroundColor: 'var(--glass-bg)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', width: '150px' }}
+                className="tech-input font-mono"
+                style={{ width: '140px', fontSize: '12px' }}
               />
             </div>
           )}
@@ -546,33 +602,35 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {localModelStatus === 'exists' && (
                 <div style={{ 
-                  color: '#34c759', 
-                  fontSize: '13px', 
-                  fontWeight: 500,
+                  color: 'var(--accent-emerald)', 
+                  fontSize: '12px', 
+                  fontWeight: 600,
                   display: 'flex', 
                   alignItems: 'center', 
                   gap: '6px',
-                  backgroundColor: 'rgba(52, 199, 89, 0.15)',
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(52, 199, 89, 0.3)'
+                  backgroundColor: 'var(--accent-emerald-bg)',
+                  padding: '5px 12px',
+                  borderRadius: '999px',
+                  border: '1px solid rgba(16, 185, 129, 0.3)'
                 }}>
-                  <span>本地模型已就绪</span>
-                  <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: '#34c759', borderRadius: '50%' }}></span>
+                  <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: 'var(--accent-emerald)', borderRadius: '50%', boxShadow: '0 0 8px var(--accent-emerald)' }}></span>
+                  <span>Qwen3 引擎在线</span>
                 </div>
               )}
               {localModelStatus === 'missing' && (
                 <button 
                   onClick={downloadLocalModel}
-                  style={{ backgroundColor: 'var(--apple-blue)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}
+                  className="btn-primary"
+                  style={{ padding: '6px 14px', fontSize: '12px' }}
                 >
-                  Download Local Model
+                  <Cpu size={14} />
+                  下载本地模型
                 </button>
               )}
               {localModelStatus === 'downloading' && (
-                <div style={{ color: 'var(--apple-blue)', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>正在下载模型:</span>
-                  <span style={{ fontWeight: 'bold' }}>{Math.round(downloadProgress)}%</span>
+                <div style={{ color: 'var(--accent-cyan)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>下载模型中:</span>
+                  <span className="font-mono" style={{ fontWeight: 'bold' }}>{Math.round(downloadProgress)}%</span>
                 </div>
               )}
             </div>
@@ -580,57 +638,44 @@ function App() {
           
           <button 
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-            style={{ 
-              backgroundColor: 'transparent', 
-              color: 'var(--text-secondary)', 
-              border: 'none', 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '6px'
-            }}
-            title={theme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            className="btn-ghost"
+            style={{ padding: '8px', borderRadius: '50%' }}
+            title={theme === 'dark' ? "切换为明亮模式" : "切换为暗夜模式"}
           >
-            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
           </button>
 
           <a 
             href="https://github.com/Tanue-Hou/phd-thesis-butler" 
             target="_blank" 
             rel="noreferrer"
-            style={{ color: 'var(--text-secondary)', fontSize: '13px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}
+            className="btn-ghost font-mono"
+            style={{ textDecoration: 'none', fontSize: '12px' }}
           >
-            <svg height="16" viewBox="0 0 16 16" width="16" fill="currentColor"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path></svg>
-            phd-thesis-butler
+            <ExternalLink size={14} />
+            GitHub
           </a>
           
           {file && (
             <div style={{ display: 'flex', gap: '8px' }}>
               {isAnalyzing ? (
                 <>
-                  <button className="btn-primary" disabled style={{ opacity: 0.7 }}>
-                    Analyzing... {progress.current}/{progress.total}
+                  <button className="btn-primary" disabled style={{ opacity: 0.85 }}>
+                    <Activity size={14} className="pulse-fast" />
+                    <span>质检中 {progress.current}/{progress.total}</span>
                   </button>
                   <button 
                     onClick={stopAnalysis}
-                    style={{ 
-                      backgroundColor: 'var(--apple-red)', 
-                      color: 'white', 
-                      border: 'none', 
-                      borderRadius: '20px', 
-                      padding: '8px 16px', 
-                      fontWeight: 600, 
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      boxShadow: '0 2px 8px rgba(255, 69, 58, 0.3)'
-                    }}
+                    className="btn-danger"
                   >
-                    Stop
+                    <Square size={13} />
+                    停止
                   </button>
                 </>
               ) : (
                 <button className="btn-primary" onClick={startAnalysis}>
-                  Run Analysis
+                  <Play size={14} />
+                  启动多维质检
                 </button>
               )}
             </div>
@@ -638,66 +683,86 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Studio Viewport */}
       <main className="main-content">
-        {/* Left Column: Document Viewer */}
+        {/* Left Column: Manuscript Reading Station */}
         <div className="column-left">
           {!file ? (
-            <div className="upload-zone" onClick={() => document.getElementById('file-upload')?.click()}>
-              <Upload size={48} color="var(--text-secondary)" style={{ marginBottom: '16px' }} />
-              <h2>Upload Manuscript</h2>
-              <p className="text-secondary" style={{ marginTop: '8px' }}>Drag & drop your .docx, .pdf or .txt file here</p>
-              <input 
-                id="file-upload" 
-                type="file" 
-                accept=".docx,.pdf,.txt" 
-                style={{ display: 'none' }} 
-                onChange={handleFileUpload}
-              />
-              
-              <div 
-                style={{
-                  marginTop: '28px',
-                  padding: '16px 20px',
-                  borderRadius: '12px',
-                  backgroundColor: 'var(--glass-bg)',
-                  border: '1px solid var(--glass-border)',
-                  backdropFilter: 'blur(10px)',
-                  width: '100%',
-                  maxWidth: '460px',
-                  boxSizing: 'border-box',
-                  textAlign: 'left'
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}>
-                  <FileText size={16} color="var(--apple-blue)" />
-                  本地文献核验库 (选填)
-                </h3>
-                <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '14px', lineHeight: '1.4' }}>
-                  如果不提供本地 PDF，系统诊断时将自动解析正文引文与文末参考文献，并联网（OpenAlex）获取摘要进行真实性核验。
+            <div className="upload-zone-wrapper">
+              <div className="upload-zone" onClick={() => document.getElementById('file-upload')?.click()}>
+                <div className="upload-icon-halo">
+                  <Upload size={32} color="var(--accent-cyan)" />
+                </div>
+                <h2 style={{ fontSize: '20px', fontWeight: '700', letterSpacing: '-0.02em', marginBottom: '8px' }}>
+                  导入俄语学术手稿
+                </h2>
+                <p className="text-secondary" style={{ fontSize: '14px', maxWidth: '440px', textAlign: 'center', lineHeight: '1.5' }}>
+                  拖拽或点击上传俄文学位论文或期刊草稿 (支持 <strong>.docx</strong>, <strong>.pdf</strong>, <strong>.txt</strong> 格式)
                 </p>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', borderRadius: '6px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', marginRight: '8px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)' }}>BibTeX 文献数据库</span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        {bibtexFile ? bibtexFile.name : '未选择 (.bib)'}
-                      </span>
+                <input 
+                  id="file-upload" 
+                  type="file" 
+                  accept=".docx,.pdf,.txt" 
+                  style={{ display: 'none' }} 
+                  onChange={handleFileUpload}
+                />
+              </div>
+
+              {/* Private Literature Corpus Configuration */}
+              <div 
+                style={{
+                  marginTop: '24px',
+                  padding: '22px 26px',
+                  borderRadius: '16px',
+                  backgroundColor: 'var(--bg-surface-1)',
+                  border: '1px solid var(--border-subtle)',
+                  backdropFilter: 'blur(24px)',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  boxShadow: 'var(--shadow-card)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--accent-blue-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <BookOpen size={16} color="var(--accent-blue)" />
                     </div>
-                    <button 
-                      type="button"
-                      onClick={() => document.getElementById('bibtex-upload')?.click()}
-                      style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid var(--apple-blue)', color: 'var(--apple-blue)', backgroundColor: 'transparent', borderRadius: '4px', cursor: 'pointer', fontWeight: '500', flexShrink: 0 }}
-                    >
-                      {bibtexFile ? '替换' : '选择'}
-                    </button>
+                    <div>
+                      <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                        本地文献全文核验库 (Corpus Reference Hub)
+                      </h3>
+                      <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                        选填：若未提供本地全文 PDF，系统将自动利用 OpenAlex 检索摘要进行证据真实性核实。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
+                  {/* BibTeX Entry Card */}
+                  <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-card-inner)', border: '1px solid var(--border-subtle)', borderRadius: '10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>BibTeX 参考文献索引</div>
+                      <div className="font-mono" style={{ fontSize: '11px', color: 'var(--text-tertiary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        {bibtexFile ? bibtexFile.name : '尚未选择 (.bib)'}
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button 
+                        type="button"
+                        onClick={() => document.getElementById('bibtex-upload')?.click()}
+                        className="btn-ghost font-mono"
+                        style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)' }}
+                      >
+                        {bibtexFile ? '替换文件' : '选择 .bib'}
+                      </button>
+                    </div>
                     <input 
-                      id="bibtex-upload"
-                      type="file"
-                      accept=".bib"
-                      style={{ display: 'none' }}
+                      id="bibtex-upload" 
+                      type="file" 
+                      accept=".bib" 
+                      style={{ display: 'none' }} 
                       onChange={(e) => {
                         if (e.target.files && e.target.files.length > 0) {
                           setBibtexFile(e.target.files[0]);
@@ -706,26 +771,30 @@ function App() {
                     />
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', borderRadius: '6px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', marginRight: '8px' }}>
-                      <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-primary)' }}>参考文献 PDF 列表</span>
-                      <span style={{ fontSize: '10px', color: 'var(--text-tertiary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        {referenceFiles.length > 0 ? `已选择 ${referenceFiles.length} 个文件` : '未选择 (.pdf)'}
-                      </span>
+                  {/* PDF Full-text Corpus Card */}
+                  <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-card-inner)', border: '1px solid var(--border-subtle)', borderRadius: '10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>参考论文 PDF 全文集</div>
+                      <div className="font-mono" style={{ fontSize: '11px', color: 'var(--text-tertiary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        {referenceFiles.length > 0 ? `已装载 ${referenceFiles.length} 篇参考论文` : '尚未选择 (.pdf 集合)'}
+                      </div>
                     </div>
-                    <button 
-                      type="button"
-                      onClick={() => document.getElementById('pdfs-upload')?.click()}
-                      style={{ fontSize: '11px', padding: '4px 10px', border: '1px solid var(--apple-blue)', color: 'var(--apple-blue)', backgroundColor: 'transparent', borderRadius: '4px', cursor: 'pointer', fontWeight: '500', flexShrink: 0 }}
-                    >
-                      {referenceFiles.length > 0 ? '重选' : '选择'}
-                    </button>
+                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button 
+                        type="button"
+                        onClick={() => document.getElementById('pdfs-upload')?.click()}
+                        className="btn-ghost font-mono"
+                        style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)' }}
+                      >
+                        {referenceFiles.length > 0 ? '重新选择' : '批量导入 PDF'}
+                      </button>
+                    </div>
                     <input 
-                      id="pdfs-upload"
-                      type="file"
-                      multiple
-                      accept=".pdf"
-                      style={{ display: 'none' }}
+                      id="pdfs-upload" 
+                      type="file" 
+                      multiple 
+                      accept=".pdf" 
+                      style={{ display: 'none' }} 
                       onChange={(e) => {
                         if (e.target.files && e.target.files.length > 0) {
                           setReferenceFiles(Array.from(e.target.files));
@@ -736,168 +805,203 @@ function App() {
                 </div>
 
                 {referencesUploadStatus !== 'idle' && (
-                  <div style={{ marginTop: '10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {referencesUploadStatus === 'uploading' && <span style={{ color: 'var(--apple-blue)' }}>⏳ 正在向会话注册文献库...</span>}
-                    {referencesUploadStatus === 'success' && <span style={{ color: 'var(--apple-green-text)' }}>✅ 文献库注册绑定成功</span>}
-                    {referencesUploadStatus === 'error' && <span style={{ color: 'var(--apple-red-text)' }}>❌ 文献库注册失败 (自动回退至在线模式)</span>}
+                  <div style={{ marginTop: '14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {referencesUploadStatus === 'uploading' && <span style={{ color: 'var(--accent-cyan)' }}>⏳ 正在建立语义检索索引与文献库注册...</span>}
+                    {referencesUploadStatus === 'success' && <span style={{ color: 'var(--accent-emerald)' }}>✅ 文献库注册与 BM25 索引构建完毕</span>}
+                    {referencesUploadStatus === 'error' && <span style={{ color: 'var(--accent-rose)' }}>❌ 文献库注册失败，将自动降级至在线检索模式</span>}
                   </div>
                 )}
               </div>
             </div>
           ) : (
             <div className="document-viewer">
+              {/* Document Status Header Bar */}
               <div 
                 style={{
-                  marginBottom: '20px',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  backgroundColor: 'var(--glass-bg)',
-                  border: '1px solid var(--glass-border)',
+                  marginBottom: '24px',
+                  padding: '14px 20px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--bg-surface-1)',
+                  border: '1px solid var(--border-subtle)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  fontSize: '13px'
+                  boxShadow: 'var(--shadow-card)'
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <FileText size={16} color="var(--apple-blue)" />
-                  <span>
-                    文献核验模式: {' '}
-                    {referencesUploadStatus === 'success' ? (
-                      <strong style={{ color: 'var(--apple-green-text)' }}>本地文献库已绑定 ({referenceFiles.length} PDF)</strong>
-                    ) : (
-                      <strong style={{ color: 'var(--apple-blue-text)' }}>在线补位模式已激活 (基于 OpenAlex 摘要核验)</strong>
-                    )}
-                  </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <FileText size={18} color="var(--accent-cyan)" />
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {file.name}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginLeft: '12px' }}>
+                      文献核验: {referencesUploadStatus === 'success' ? (
+                        <strong style={{ color: 'var(--accent-emerald)' }}>本地全文证据库 ({referenceFiles.length} 篇)</strong>
+                      ) : (
+                        <strong style={{ color: 'var(--accent-blue)' }}>在线补位模式 (OpenAlex 实时核验)</strong>
+                      )}
+                    </span>
+                  </div>
                 </div>
-                <button 
-                  onClick={() => {
-                    setBibtexFile(null);
-                    setReferenceFiles([]);
-                    setReferencesUploadStatus('idle');
-                  }}
-                  style={{ fontSize: '11px', padding: '4px 8px', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', backgroundColor: 'transparent', borderRadius: '4px', cursor: 'pointer' }}
-                >
-                  重置文献库
-                </button>
+                
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    onClick={() => {
+                      setFile(null);
+                      setDocumentText('');
+                      setSentences([]);
+                      setAllDiagnostics({});
+                      setSelectedSentenceIndex(null);
+                    }}
+                    className="btn-ghost"
+                    style={{ fontSize: '12px', padding: '5px 12px' }}
+                  >
+                    <RotateCcw size={13} />
+                    重新导入手稿
+                  </button>
+                </div>
               </div>
 
-              {sentences.length === 0 ? (
-                <div style={{ whiteSpace: 'pre-wrap' }}>{documentText}</div>
-              ) : (
-                sentences.map((s, idx) => (
-                  <span 
-                    key={idx} 
-                    ref={el => { sentenceRefs.current[idx] = el; }}
-                    className={`sentence ${s.status} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
-                    title={s.status}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => {
-                      setSelectedSentenceIndex(idx);
-                      rightColumnRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                  >
-                    {s.text}
-                    {s.ppl !== undefined && s.ppl !== null && (
-                      <sub 
-                        className="ppl-tag font-mono" 
-                        style={{ 
-                          color: s.ppl < 15 ? 'var(--apple-red-text)' : s.ppl < 25 ? 'var(--apple-orange-text)' : 'var(--text-secondary)',
-                          marginLeft: '4px',
-                          fontSize: '10px',
-                          verticalAlign: 'sub',
-                          opacity: 0.8,
-                          userSelect: 'none'
-                        }}
-                      >
-                        {s.ppl}
-                      </sub>
-                    )}
-                    {' '}
-                  </span>
-                ))
-              )}
+              {/* Manuscript Reading Canvas */}
+              <div className="document-canvas">
+                {sentences.length === 0 ? (
+                  <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>{documentText}</div>
+                ) : (
+                  sentences.map((s, idx) => (
+                    <span 
+                      key={idx} 
+                      ref={el => { sentenceRefs.current[idx] = el; }}
+                      className={`sentence ${s.status} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
+                      title={s.status}
+                      onClick={() => {
+                        setSelectedSentenceIndex(idx);
+                        rightColumnRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                    >
+                      {s.text}
+                      {s.ppl !== undefined && s.ppl !== null && (
+                        <sub 
+                          className="ppl-tag font-mono" 
+                          style={{ 
+                            color: s.ppl < 15 ? 'var(--accent-rose)' : s.ppl < 25 ? 'var(--accent-amber)' : 'var(--text-tertiary)',
+                          }}
+                        >
+                          PPL {s.ppl}
+                        </sub>
+                      )}
+                      {' '}
+                    </span>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Right Column: Diagnostics Stream */}
+        {/* Right Column: High-Tech Telemetry & Stream */}
         <div className="column-right" ref={rightColumnRef}>
           <div className="stream-container">
+            {/* Academic Discipline Capsule */}
             {file && (
-              <div className="glass-card" style={{ marginBottom: '8px', borderLeft: `4px solid ${DISCIPLINE_MAP[discipline]?.color || 'var(--text-secondary)'}`, transition: 'all 0.5s ease' }}>
-                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Academic Discipline / 学科领域分类
+              <div className="glass-card" style={{ 
+                marginBottom: '4px', 
+                border: `1px solid ${DISCIPLINE_MAP[discipline]?.color || 'var(--border-subtle)'}`,
+                background: 'linear-gradient(180deg, var(--bg-surface-1) 0%, var(--bg-card-inner) 100%)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <DisciplineIcon size={16} color={DISCIPLINE_MAP[discipline]?.color || 'var(--accent-cyan)'} />
+                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                      学科领域智能归类 (Academic Domain)
+                    </span>
+                  </div>
+                  <span style={{ 
+                    fontSize: '11px', 
+                    padding: '2px 8px', 
+                    borderRadius: '999px', 
+                    backgroundColor: 'rgba(255,255,255,0.06)', 
+                    color: DISCIPLINE_MAP[discipline]?.color || 'var(--text-primary)',
+                    fontWeight: 600,
+                    fontFamily: 'var(--font-mono)'
+                  }}>
+                    {discipline}
+                  </span>
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '4px', color: DISCIPLINE_MAP[discipline]?.color || 'var(--text-primary)' }}>
-                  {DISCIPLINE_MAP[discipline]?.en || 'Universal Academic'}
-                </div>
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
                   {DISCIPLINE_MAP[discipline]?.zh || '通用学术与跨学科领域'}
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  {DISCIPLINE_MAP[discipline]?.en || 'Universal Academic Domain'}
                 </div>
               </div>
             )}
 
-            {/* Global Stats & Telemetry */}
+            {/* Global Telemetry & Risk Matrix */}
             {progress.total > 0 && (
-              <div className="glass-card" style={{ marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div className="glass-card" style={{ marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
                   <div>
-                    <div className="text-secondary" style={{ fontSize: '12px' }}>Style Risk / 风格风险率</div>
-                    <div style={{ fontSize: '20px', fontWeight: 600, color: stats.flaggedCount > 0 ? 'var(--apple-red-text)' : 'var(--apple-green-text)' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                      总体风格风险率 (Style Risk)
+                    </div>
+                    <div className="font-mono" style={{ fontSize: '24px', fontWeight: 800, marginTop: '2px', color: stats.flaggedCount > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)' }}>
                       {Math.round((stats.flaggedCount / progress.total) * 100)}%
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div className="text-secondary" style={{ fontSize: '12px' }}>Avg Perplexity (PPL)</div>
-                    <div style={{ fontSize: '20px', fontWeight: 600, color: 'var(--apple-orange-text)' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                      平均困惑度 (Avg PPL)
+                    </div>
+                    <div className="font-mono" style={{ fontSize: '24px', fontWeight: 800, marginTop: '2px', color: 'var(--accent-cyan)' }}>
                       {stats.pplCount > 0 ? (stats.totalPPL / stats.pplCount).toFixed(1) : '-'}
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', borderTop: '1px solid var(--glass-border)', paddingTop: '14px' }}>
-                  {/* 1. Predictability Risk */}
+                {/* 4 Multi-Channel Risk Gauges */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
+                  {/* 1. Predictability */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Predictability Risk (可预测性风险)</span>
-                      <span style={{ fontWeight: 600, color: 'var(--apple-blue-text)' }}>{runningRisks.predictability}%</span>
+                    <div className="telemetry-row">
+                      <span style={{ color: 'var(--text-secondary)' }}>可预测性特征 (Predictability Risk)</span>
+                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{runningRisks.predictability}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'var(--card-inner-bg)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${runningRisks.predictability}%`, background: 'var(--apple-blue)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                    <div className="telemetry-track">
+                      <div className="telemetry-fill" style={{ width: `${runningRisks.predictability}%`, background: 'linear-gradient(90deg, #00B4D8 0%, #00E5FF 100%)' }} />
                     </div>
                   </div>
 
-                  {/* 2. Uniformity Risk */}
+                  {/* 2. Uniformity */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Uniformity Risk (句式均匀性风险)</span>
-                      <span style={{ fontWeight: 600, color: 'var(--apple-purple-text)' }}>{runningRisks.uniformity}%</span>
+                    <div className="telemetry-row">
+                      <span style={{ color: 'var(--text-secondary)' }}>句式均匀度 (Uniformity Risk)</span>
+                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-violet)' }}>{runningRisks.uniformity}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'var(--card-inner-bg)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${runningRisks.uniformity}%`, background: 'var(--apple-purple)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                    <div className="telemetry-track">
+                      <div className="telemetry-fill" style={{ width: `${runningRisks.uniformity}%`, background: 'linear-gradient(90deg, #8B5CF6 0%, #C084FC 100%)' }} />
                     </div>
                   </div>
 
-                  {/* 3. Translationese Risk */}
+                  {/* 3. Translationese */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Translationese Risk (翻译腔风险)</span>
-                      <span style={{ fontWeight: 600, color: 'var(--apple-orange-text)' }}>{runningRisks.translationese}%</span>
+                    <div className="telemetry-row">
+                      <span style={{ color: 'var(--text-secondary)' }}>机器翻译腔 (Translationese Risk)</span>
+                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>{runningRisks.translationese}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'var(--card-inner-bg)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${runningRisks.translationese}%`, background: 'var(--apple-orange)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                    <div className="telemetry-track">
+                      <div className="telemetry-fill" style={{ width: `${runningRisks.translationese}%`, background: 'linear-gradient(90deg, #F59E0B 0%, #FBBF24 100%)' }} />
                     </div>
                   </div>
 
-                  {/* 4. Redundancy Risk */}
+                  {/* 4. Redundancy */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '4px' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Redundancy Risk (语义冗余风险)</span>
-                      <span style={{ fontWeight: 600, color: 'var(--apple-red-text)' }}>{runningRisks.redundancy}%</span>
+                    <div className="telemetry-row">
+                      <span style={{ color: 'var(--text-secondary)' }}>语义冗余度 (Redundancy Risk)</span>
+                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-rose)' }}>{runningRisks.redundancy}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'var(--card-inner-bg)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${runningRisks.redundancy}%`, background: 'var(--apple-red)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                    <div className="telemetry-track">
+                      <div className="telemetry-fill" style={{ width: `${runningRisks.redundancy}%`, background: 'linear-gradient(90deg, #E11D48 0%, #FB7185 100%)' }} />
                     </div>
                   </div>
                 </div>
@@ -905,122 +1009,154 @@ function App() {
             )}
 
             {!file && (
-              <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '40px' }}>
-                <FileText size={48} style={{ opacity: 0.2, margin: '0 auto 16px auto' }} />
-                <p>Upload a document to begin the<br/>AI diagnostics stream.</p>
+              <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '80px', padding: '0 20px' }}>
+                <Zap size={36} color="var(--text-tertiary)" style={{ opacity: 0.3, margin: '0 auto 16px auto' }} />
+                <h4 style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '6px' }}>质检控制台就绪</h4>
+                <p style={{ fontSize: '12px', lineHeight: '1.6' }}>在左侧导入手稿后，此处将流式展示每一句话的 PPL 困惑度、词法结构指标与大模型推导链条。</p>
               </div>
             )}
             
             {/* Selected Sentence Inspector */}
             {file && (
               <div className="glass-card" style={{ 
-                marginBottom: '20px', 
-                border: '1px solid var(--apple-blue)', 
-                background: 'rgba(0, 122, 255, 0.04)',
-                padding: '16px',
-                borderRadius: '12px'
+                marginBottom: '16px', 
+                border: '1px solid var(--accent-cyan)', 
+                background: 'linear-gradient(180deg, rgba(0, 229, 255, 0.05) 0%, var(--bg-surface-1) 100%)',
+                boxShadow: '0 0 20px var(--accent-cyan-glow)'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <LayoutDashboard size={16} color="var(--apple-blue-text)" />
-                    <span style={{ fontWeight: 600, color: 'var(--apple-blue-text)', fontSize: '14px' }}>
-                      风格透视 (Sentence Inspector)
+                    <Activity size={16} color="var(--accent-cyan)" />
+                    <span style={{ fontWeight: 700, color: 'var(--accent-cyan)', fontSize: '13px', letterSpacing: '0.02em' }}>
+                      风格透视控制台 (Sentence Inspector)
                     </span>
                   </div>
                   {selectedSentenceIndex !== null && (
                     <button 
                       onClick={() => setSelectedSentenceIndex(null)}
-                      style={{ 
-                        background: 'none', 
-                        border: 'none', 
-                        color: 'var(--text-tertiary)', 
-                        cursor: 'pointer',
-                        fontSize: '12px'
-                      }}
+                      className="btn-ghost"
+                      style={{ fontSize: '11px', padding: '2px 8px' }}
                     >
-                      Clear
+                      取消选定
                     </button>
                   )}
                 </div>
 
                 {selectedSentenceIndex === null ? (
-                  <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', textAlign: 'center', padding: '10px 0' }}>
-                    💡 点击左侧文档中的任意句子，在此透视模型深度 analysis 及风格修改建议。
+                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', textAlign: 'center', padding: '16px 0', lineHeight: '1.6' }}>
+                    💡 提示：点击左侧手稿中的任意句子，在此透视其深层词法统计、大模型反思推断以及润色重构建议。
                   </p>
                 ) : (
                   <div>
                     {allDiagnostics[selectedSentenceIndex] ? (
                       <div>
-                        <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.5', background: 'var(--card-inner-bg)', padding: '10px', borderRadius: '6px' }}>
+                        <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.6', background: 'var(--bg-card-inner)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                           "{allDiagnostics[selectedSentenceIndex].text}"
-                        </p>
+                        </div>
                         
-                        <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
-                          <div className="metric-row" style={{ marginTop: 0 }}>
-                            <span className="text-secondary font-mono">PPL (Perplexity)</span>
+                        <div style={{ background: 'var(--bg-card-inner)', borderRadius: '10px', padding: '14px', fontSize: '12px', border: '1px solid var(--border-subtle)' }}>
+                          <div className="metric-row">
+                            <span className="text-secondary font-mono">PPL (Perplexity 困惑度)</span>
                             <span className="metric-value font-mono" style={{ 
-                              color: allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 15 ? 'var(--apple-red-text)' : allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 25 ? 'var(--apple-orange-text)' : 'var(--text-secondary)',
-                              fontWeight: 600
+                              color: allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 15 ? 'var(--accent-rose)' : allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 25 ? 'var(--accent-amber)' : 'var(--accent-emerald)',
+                              fontWeight: 700,
+                              fontSize: '13px'
                             }}>
-                              {allDiagnostics[selectedSentenceIndex].ppl !== null ? allDiagnostics[selectedSentenceIndex].ppl : 'N/A (API模式)'}
+                              {allDiagnostics[selectedSentenceIndex].ppl !== null ? allDiagnostics[selectedSentenceIndex].ppl : '云端纯推理'}
                             </span>
                           </div>
                           
-                          <div className="metric-row">
-                            <span className="text-secondary">Status</span>
+                          <div className="metric-row" style={{ marginTop: '8px' }}>
+                            <span className="text-secondary">裁定状态 (Status)</span>
                             <span style={{ 
-                              color: allDiagnostics[selectedSentenceIndex].status === 'flagged' ? 'var(--apple-red-text)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? 'var(--apple-blue-text)' : 'var(--apple-green-text)',
-                              fontWeight: 600
+                              color: allDiagnostics[selectedSentenceIndex].status === 'flagged' ? 'var(--accent-rose)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? 'var(--accent-cyan)' : 'var(--accent-emerald)',
+                              fontWeight: 700
                             }}>
-                              {allDiagnostics[selectedSentenceIndex].status === 'flagged' ? '风格警报 (Flagged)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? '早退通过 (Early Exit)' : '通过 (Passed)'}
+                              {allDiagnostics[selectedSentenceIndex].status === 'flagged' ? '● 存在风格异状 (Flagged)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? '✓ 安全通过 (Early Exit)' : '✓ 专家标准通过 (Passed)'}
                             </span>
                           </div>
 
                           {allDiagnostics[selectedSentenceIndex].metrics && (
-                            <div style={{ marginTop: '8px', padding: '8px', background: 'var(--card-inner-bg)', borderRadius: '6px' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                <div>名/动比率: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.nv_ratio}</span></div>
-                                <div>被动语态: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.passive_count}</span></div>
-                                <div>第二格长链: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.genitive_chains_count}</span></div>
-                                <div>套话匹配: <span style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.cliches_count}</span></div>
+                            <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                <div>名/动比率: <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.nv_ratio}</strong></div>
+                                <div>被动语态频次: <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.passive_count}</strong></div>
+                                <div>第二格长链数: <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.genitive_chains_count}</strong></div>
+                                <div>学术套话命中: <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.cliches_count}</strong></div>
                               </div>
                             </div>
                           )}
 
                           {allDiagnostics[selectedSentenceIndex].think && (
-                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
+                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
                               <details style={{ cursor: 'pointer' }}>
-                                <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none' }}>
-                                  ▶ View Model Reasoning (模型诊断原因)
+                                <summary style={{ color: 'var(--text-secondary)', fontSize: '11px', outline: 'none', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <ChevronRight size={13} />
+                                  <span>模型诊断思维链 (Reasoning Trace)</span>
                                 </summary>
-                                <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '8px', whiteSpace: 'pre-wrap', lineHeight: '1.4', fontFamily: 'var(--font-mono)' }}>
+                                <div className="terminal-block">
                                   {allDiagnostics[selectedSentenceIndex].think}
-                                </p>
+                                </div>
                               </details>
                             </div>
                           )}
 
                           {allDiagnostics[selectedSentenceIndex].explanation && (
-                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
-                              <p className="text-secondary" style={{ marginBottom: '4px' }}>Analysis</p>
-                              <p style={{ color: allDiagnostics[selectedSentenceIndex].issue_type === 'json_parse_error' ? 'var(--apple-red-text)' : 'var(--apple-orange-text)' }}>
+                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+                              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                异状成因剖析
+                              </div>
+                              <p style={{ color: allDiagnostics[selectedSentenceIndex].issue_type === 'json_parse_error' ? 'var(--accent-rose)' : 'var(--accent-amber)', lineHeight: '1.5' }}>
                                 {allDiagnostics[selectedSentenceIndex].explanation}
                               </p>
                             </div>
                           )}
 
                           {allDiagnostics[selectedSentenceIndex].suggestion && allDiagnostics[selectedSentenceIndex].suggestion !== 'N/A' && allDiagnostics[selectedSentenceIndex].suggestion !== '-' && (
-                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
-                              <p className="text-secondary" style={{ marginBottom: '4px' }}>Suggestion (修改建议)</p>
-                              <p style={{ color: 'var(--apple-green-text)', fontWeight: 500 }}>{allDiagnostics[selectedSentenceIndex].suggestion}</p>
+                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <Sparkles size={13} />
+                                  <span>学界标准改写建议 (Revision Suggestion)</span>
+                                </div>
+                                <button 
+                                  onClick={() => copyToClipboard(allDiagnostics[selectedSentenceIndex].suggestion || '', `sugg-${selectedSentenceIndex}`)}
+                                  className="btn-ghost"
+                                  style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px' }}
+                                >
+                                  {copiedKey === `sugg-${selectedSentenceIndex}` ? (
+                                    <>
+                                      <Check size={12} color="var(--accent-emerald)" />
+                                      <span style={{ color: 'var(--accent-emerald)' }}>已复制</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy size={12} />
+                                      <span>复制</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                              <div style={{ 
+                                color: 'var(--accent-emerald)', 
+                                fontWeight: 500, 
+                                lineHeight: '1.5',
+                                padding: '8px 10px',
+                                background: 'var(--accent-emerald-bg)',
+                                borderRadius: '6px',
+                                border: '1px solid rgba(16, 185, 129, 0.2)'
+                              }}>
+                                {allDiagnostics[selectedSentenceIndex].suggestion}
+                              </div>
                             </div>
                           )}
+                          
                           {renderCitationAudit(allDiagnostics[selectedSentenceIndex])}
                         </div>
                       </div>
                     ) : (
-                      <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', textAlign: 'center' }}>
-                        Sentence clicked, waiting for diagnostic stream results...
+                      <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', textAlign: 'center', padding: '10px 0' }}>
+                        句段选中，正在等待诊断流反馈...
                       </p>
                     )}
                   </div>
@@ -1028,6 +1164,7 @@ function App() {
               </div>
             )}
 
+            {/* Filter Tabs & Diagnostic Stream */}
             {(() => {
               const sortedDiagnostics = Object.values(allDiagnostics).sort((a, b) => a.index - b.index);
               const passedCount = sortedDiagnostics.filter(d => d.status !== 'flagged').length;
@@ -1053,407 +1190,164 @@ function App() {
                         >
                           无风险 ({passedCount})
                         </button>
-                      </div>
-                      <div className="tabs-container">
                         <button 
                           className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
                           onClick={() => setActiveTab('ai')}
                         >
-                          AI风险 ({aiCount})
+                          AI特征 ({aiCount})
                         </button>
                         <button 
                           className={`tab-btn ${activeTab === 'flagged' ? 'active' : ''}`}
                           onClick={() => setActiveTab('flagged')}
                         >
-                          风格警报 ({styleCount})
+                          学术套话 ({styleCount})
                         </button>
                         <button 
                           className={`tab-btn ${activeTab === 'integrity' ? 'active' : ''}`}
                           onClick={() => setActiveTab('integrity')}
                         >
-                          文献异常 ({integrityCount})
+                          引文冲突 ({integrityCount})
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {activeTab === 'all' && (
-                    <>
-                      {sortedDiagnostics.map((diag) => (
-                        diag.status === 'flagged' ? (
-                          <div 
-                            key={diag.index}
-                            className="glass-card slide-in" 
-                            onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
-                            style={{ borderLeft: '4px solid var(--apple-red)' }}
-                          >
-                            {(() => {
-                              const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange-text)" };
-                              return (
-                                <div className="card-header" style={{ color: issueInfo.color, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                  <AlertCircle size={16} color={issueInfo.color} />
-                                  <span style={{ fontWeight: 600 }}>{issueInfo.title}</span>
-                                </div>
-                              );
-                            })()}
-                            
-                            <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
-                              "{diag.text.substring(0, 80)}..."
-                            </p>
-                            
-                            <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
-                              <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                <span className="text-secondary font-mono">PPL (Perplexity)</span>
-                                <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
-                              </div>
-                              <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                <span className="text-secondary">Issue</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{diag.issue_type}</span>
-                              </div>
-                              
-                              {diag.think && (
-                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                  <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                                    <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
-                                      ▶ View Model Reasoning
-                                    </summary>
-                                    <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
-                                      {diag.think}
-                                    </p>
-                                  </details>
-                                </div>
-                              )}
+                  {/* Render Diagnostic Items */}
+                  {sortedDiagnostics
+                    .filter(diag => {
+                      if (activeTab === 'all') return true;
+                      if (activeTab === 'passed') return diag.status !== 'flagged';
+                      if (activeTab === 'ai') return diag.status === 'flagged' && diag.issue_type === 'ai_generated_suspicion';
+                      if (activeTab === 'flagged') return diag.status === 'flagged' && diag.issue_type !== 'ai_generated_suspicion' && diag.issue_type !== 'citation_gap' && diag.issue_type !== 'citation_contradiction';
+                      if (activeTab === 'integrity') return diag.status === 'flagged' && (diag.issue_type === 'citation_gap' || diag.issue_type === 'citation_contradiction');
+                      return true;
+                    })
+                    .map((diag) => {
+                      const isFlagged = diag.status === 'flagged';
+                      const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { 
+                        title: "学术风格提示 (Style Notice)", 
+                        color: "var(--accent-amber)",
+                        bg: "var(--accent-amber-bg)"
+                      };
+                      const cardAccent = !isFlagged ? 'var(--accent-emerald)' : issueInfo.color;
 
-                              {diag.explanation && (
-                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                  <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Analysis</p>
-                                  <p style={{ color: diag.issue_type === 'json_parse_error' ? 'var(--apple-red-text)' : 'var(--apple-orange-text)', fontSize: '12px', lineHeight: '1.4' }}>{diag.explanation}</p>
-                                </div>
-                              )}
-                              
-                              {diag.suggestion && diag.suggestion !== 'N/A' && (
-                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                  <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Suggestion</p>
-                                  <p style={{ color: 'var(--apple-green-text)', fontWeight: 500, fontSize: '12px' }}>{diag.suggestion}</p>
-                                </div>
-                              )}
-                              {renderCitationAudit(diag)}
-                            </div>
-                          </div>
-                        ) : (
-                          <div 
-                            key={diag.index}
-                            className="glass-card slide-in passed-card" 
-                            onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
-                            style={{ borderLeft: '4px solid var(--apple-green)' }}
-                          >
-                            <div className="card-header" style={{ color: 'var(--apple-green-text)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                              <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--apple-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>✓</div>
-                              <span style={{ fontWeight: 600 }}>无风险 (Passed / Clean Style)</span>
-                            </div>
-                            
-                            <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
-                              "{diag.text.substring(0, 80)}..."
-                            </p>
-                            
-                            <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
-                              <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                <span className="text-secondary font-mono">PPL (Perplexity)</span>
-                                <span className="metric-value font-mono" style={{ color: 'var(--apple-green-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
-                              </div>
-                              <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                <span className="text-secondary">Status</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
-                                  {diag.status === 'early_exit' ? '安全通过 (Early Exit)' : '专家通过 (Passed)'}
-                                </span>
-                              </div>
-                              
-                              {diag.think && (
-                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                  <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                                    <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
-                                      ▶ View Model Reasoning
-                                    </summary>
-                                    <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
-                                      {diag.think}
-                                    </p>
-                                  </details>
-                                </div>
-                              )}
-                              {renderCitationAudit(diag)}
-                            </div>
-                          </div>
-                        )
-                      ))}
-                      {integrityWarnings.length > 0 && renderIntegrityReport()}
-                    </>
-                  )}
-
-                  {activeTab === 'passed' && (
-                    <>
-                      {sortedDiagnostics.filter(d => d.status !== 'flagged').map((diag) => (
+                      return (
                         <div 
                           key={diag.index}
-                          className="glass-card slide-in passed-card" 
+                          className="diag-card slide-in" 
                           onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
-                          style={{ borderLeft: '4px solid var(--apple-green)' }}
+                          style={{ 
+                            '--card-accent': cardAccent,
+                            '--card-accent-glow': isFlagged ? 'rgba(244, 63, 94, 0.2)' : 'rgba(16, 185, 129, 0.2)'
+                          } as React.CSSProperties}
                         >
-                          <div className="card-header" style={{ color: 'var(--apple-green-text)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <div style={{ width: '16px', height: '16px', borderRadius: '50%', background: 'var(--apple-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px', fontWeight: 'bold' }}>✓</div>
-                            <span style={{ fontWeight: 600 }}>无风险 (Passed / Clean Style)</span>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                            <div className="card-header" style={{ color: isFlagged ? issueInfo.color : 'var(--accent-emerald)', margin: 0 }}>
+                              {isFlagged ? (
+                                <>
+                                  <AlertCircle size={15} color={issueInfo.color} />
+                                  <span>{issueInfo.title}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 size={15} color="var(--accent-emerald)" />
+                                  <span>学界规范通过 (Clean Scholastic Style)</span>
+                                </>
+                              )}
+                            </div>
+
+                            <span className="font-mono" style={{ 
+                              fontSize: '11px', 
+                              fontWeight: 700, 
+                              color: diag.ppl && diag.ppl < 15 ? 'var(--accent-rose)' : diag.ppl && diag.ppl < 25 ? 'var(--accent-amber)' : 'var(--accent-emerald)',
+                              backgroundColor: 'rgba(0,0,0,0.3)',
+                              padding: '2px 6px',
+                              borderRadius: '4px'
+                            }}>
+                              {diag.ppl !== null ? `PPL ${diag.ppl}` : 'PPL -'}
+                            </span>
                           </div>
                           
-                          <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
-                            "{diag.text.substring(0, 80)}..."
+                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '10px', lineHeight: '1.5' }}>
+                            "{diag.text.substring(0, 85)}{diag.text.length > 85 ? '...' : ''}"
                           </p>
                           
-                          <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
-                            <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span className="text-secondary font-mono">PPL (Perplexity)</span>
-                              <span className="metric-value font-mono" style={{ color: 'var(--apple-green-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
-                            </div>
-                            <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span className="text-secondary">Status</span>
-                              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>
-                                {diag.status === 'early_exit' ? '安全通过 (Early Exit)' : '专家通过 (Passed)'}
-                              </span>
-                            </div>
-                            
-                            {diag.think && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                                  <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
-                                    ▶ View Model Reasoning
-                                  </summary>
-                                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
-                                    {diag.think}
-                                  </p>
-                                </details>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  )}
-
-                  {activeTab === 'ai' && (
-                    <>
-                      {sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type === 'ai_generated_suspicion').map((diag) => (
-                        <div 
-                          key={diag.index}
-                          className="glass-card slide-in" 
-                          onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
-                          style={{ borderLeft: '4px solid var(--apple-red)' }}
-                        >
-                          {(() => {
-                            const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "AI 生成特征预警", color: "var(--apple-red-text)" };
-                            return (
-                              <div className="card-header" style={{ color: issueInfo.color, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                <AlertCircle size={16} color={issueInfo.color} />
-                                <span style={{ fontWeight: 600 }}>{issueInfo.title}</span>
-                              </div>
-                            );
-                          })()}
-                          
-                          <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
-                            "{diag.text.substring(0, 80)}..."
-                          </p>
-                          
-                          <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
-                            <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span className="text-secondary font-mono">PPL (Perplexity)</span>
-                              <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
-                            </div>
-                            <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span className="text-secondary">Issue</span>
-                              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{diag.issue_type}</span>
-                            </div>
-                            
-                            {diag.think && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                                  <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
-                                    ▶ View Model Reasoning
-                                  </summary>
-                                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
-                                    {diag.think}
-                                  </p>
-                                </details>
-                              </div>
-                            )}
-
+                          <div style={{ background: 'var(--bg-card-inner)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', border: '1px solid var(--border-subtle)' }}>
                             {diag.explanation && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Analysis</p>
-                                <p style={{ color: 'var(--apple-red-text)', fontSize: '12px', lineHeight: '1.4' }}>{diag.explanation}</p>
+                              <div style={{ marginBottom: '6px' }}>
+                                <p style={{ color: isFlagged ? 'var(--text-secondary)' : 'var(--accent-emerald)', lineHeight: '1.4' }}>
+                                  {diag.explanation}
+                                </p>
                               </div>
                             )}
-                            
-                            {diag.suggestion && diag.suggestion !== 'N/A' && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Suggestion</p>
-                                <p style={{ color: 'var(--apple-green-text)', fontWeight: 500, fontSize: '12px' }}>{diag.suggestion}</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </>
-                  )}
 
-                  {activeTab === 'flagged' && (
-                    <>
-                      {sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type !== 'ai_generated_suspicion' && d.issue_type !== 'citation_gap' && d.issue_type !== 'citation_contradiction').map((diag) => (
-                        <div 
-                          key={diag.index}
-                          className="glass-card slide-in" 
-                          onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
-                          style={{ borderLeft: '4px solid var(--apple-orange)' }}
-                        >
-                          {(() => {
-                            const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || { title: "学术风格警报 (Style Alert)", color: "var(--apple-orange-text)" };
-                            return (
-                              <div className="card-header" style={{ color: issueInfo.color, display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                                <AlertCircle size={16} color={issueInfo.color} />
-                                <span style={{ fontWeight: 600 }}>{issueInfo.title}</span>
+                            {diag.suggestion && diag.suggestion !== 'N/A' && diag.suggestion !== '-' && (
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-emerald)', fontWeight: 600, fontSize: '11px', marginBottom: '2px' }}>
+                                  <Sparkles size={12} />
+                                  <span>建议改写:</span>
+                                </div>
+                                <p style={{ color: 'var(--accent-emerald)', fontWeight: 500, fontSize: '12px' }}>
+                                  {diag.suggestion}
+                                </p>
                               </div>
-                            );
-                          })()}
-                          
-                          <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
-                            "{diag.text.substring(0, 80)}..."
-                          </p>
-                          
-                          <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
-                            <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span className="text-secondary font-mono">PPL (Perplexity)</span>
-                              <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
-                            </div>
-                            <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                              <span className="text-secondary">Issue</span>
-                              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{diag.issue_type}</span>
-                            </div>
-                            
+                            )}
+
                             {diag.think && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
+                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
                                 <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                                  <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
-                                    ▶ View Model Reasoning
+                                  <summary style={{ color: 'var(--text-tertiary)', outline: 'none', userSelect: 'none', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <ChevronRight size={12} />
+                                    <span>展开模型思考推断 (Think Chain)</span>
                                   </summary>
-                                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
+                                  <div className="terminal-block">
                                     {diag.think}
-                                  </p>
+                                  </div>
                                 </details>
                               </div>
                             )}
 
-                            {diag.explanation && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Analysis</p>
-                                <p style={{ color: diag.issue_type === 'json_parse_error' ? 'var(--apple-red-text)' : 'var(--apple-orange-text)', fontSize: '12px', lineHeight: '1.4' }}>{diag.explanation}</p>
-                              </div>
-                            )}
-                            
-                            {diag.suggestion && diag.suggestion !== 'N/A' && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Suggestion</p>
-                                <p style={{ color: 'var(--apple-green-text)', fontWeight: 500, fontSize: '12px' }}>{diag.suggestion}</p>
-                              </div>
-                            )}
+                            {renderCitationAudit(diag)}
                           </div>
                         </div>
-                      ))}
-                    </>
-                  )}
+                      );
+                    })}
 
-                  {activeTab === 'integrity' && (
-                    <>
-                      {sortedDiagnostics.filter(d => d.status === 'flagged' && (d.issue_type === 'citation_gap' || d.issue_type === 'citation_contradiction')).map((diag) => {
-                        const isContradiction = diag.issue_type === 'citation_contradiction';
-                        return (
-                          <div 
-                            key={diag.index}
-                            className="glass-card slide-in" 
-                            onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
-                            style={{ borderLeft: isContradiction ? '4px solid var(--apple-red)' : '4px solid var(--apple-orange)' }}
-                          >
-                            <div className="card-header" style={{ color: isContradiction ? 'var(--apple-red-text)' : 'var(--apple-orange-text)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                              <AlertCircle size={16} color={isContradiction ? 'var(--apple-red-text)' : 'var(--apple-orange-text)'} />
-                              <span style={{ fontWeight: 600 }}>
-                                {isContradiction ? '文献论点冲突 (Citation Contradiction)' : '引用支撑不足 (Citation Gap Alert)'}
-                              </span>
-                            </div>
-                            
-                            <p style={{ fontSize: '14px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.4' }}>
-                              "{diag.text.substring(0, 80)}..."
-                            </p>
-                            
-                            <div style={{ background: 'var(--card-inner-bg)', borderRadius: '8px', padding: '12px', fontSize: '13px' }}>
-                              <div className="metric-row" style={{ marginTop: 0, display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                <span className="text-secondary font-mono">PPL (Perplexity)</span>
-                                <span className="metric-value red font-mono" style={{ color: 'var(--apple-red-text)', fontWeight: 600 }}>{diag.ppl !== null ? diag.ppl : 'N/A'}</span>
-                              </div>
-                              <div className="metric-row" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                                <span className="text-secondary">Issue</span>
-                                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{diag.issue_type}</span>
-                              </div>
-                              
-                              {diag.think && (
-                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                  <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                                    <summary className="text-secondary" style={{ marginBottom: '4px', outline: 'none', userSelect: 'none', fontSize: '11px' }}>
-                                      ▶ View Model Reasoning
-                                    </summary>
-                                    <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', marginTop: '6px', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', lineHeight: '1.4' }}>
-                                      {diag.think}
-                                    </p>
-                                  </details>
-                                </div>
-                              )}
-
-                              {diag.explanation && (
-                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                  <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Analysis</p>
-                                  <p style={{ color: 'var(--apple-red-text)', fontSize: '12px', lineHeight: '1.4' }}>{diag.explanation}</p>
-                                </div>
-                              )}
-                              
-                              {diag.suggestion && diag.suggestion !== 'N/A' && (
-                                <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--glass-border)' }}>
-                                  <p className="text-secondary" style={{ marginBottom: '2px', fontSize: '11px' }}>Suggestion</p>
-                                  <p style={{ color: 'var(--apple-green-text)', fontWeight: 500, fontSize: '12px' }}>{diag.suggestion}</p>
-                                </div>
-                              )}
-                              
-                              {renderCitationAudit(diag)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {integrityWarnings.length > 0 && renderIntegrityReport()}
-                    </>
-                  )}
+                  {(activeTab === 'all' || activeTab === 'integrity') && integrityWarnings.length > 0 && renderIntegrityReport()}
                 </>
               );
             })()}
             
             {isAnalyzing && (
-              <div className="glass-card" style={{ opacity: 0.5, display: 'flex', justifyContent: 'center', padding: '24px' }}>
-                <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid var(--glass-border)', borderTopColor: 'var(--text-primary)', animation: 'spin 1s linear infinite' }} />
+              <div className="glass-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '24px' }}>
+                <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid var(--border-subtle)', borderTopColor: 'var(--accent-cyan)', animation: 'spin 0.8s linear infinite' }} />
+                <span style={{ fontSize: '13px', color: 'var(--accent-cyan)', fontWeight: 500 }}>深度神经网络质检计算中...</span>
                 <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
               </div>
             )}
             
-            {/* Future Extension UI (Placed after AI Queries) */}
+            {/* Future Extension Modules */}
             {progress.total > 0 && progress.current === progress.total && !isAnalyzing && (
-              <div className="glass-card" style={{ marginTop: '24px', opacity: 0.8 }}>
-                <h3 style={{ fontSize: '14px', marginBottom: '12px', color: 'var(--text-secondary)' }}>Extension Capabilities</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'var(--card-inner-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer' }}>✨ 润色 (Polishing)</button>
-                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'var(--card-inner-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer' }}>📚 参考文献修正 (Citations)</button>
-                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'var(--card-inner-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer' }}>📏 格式检查 (Formatting)</button>
-                  <button className="btn-secondary" style={{ width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: '13px', background: 'var(--card-inner-bg)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)', borderRadius: '6px', cursor: 'pointer' }}>🏗️ 结构分析 (Structure)</button>
+              <div className="glass-card" style={{ marginTop: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                  <Zap size={14} color="var(--accent-cyan)" />
+                  <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+                    论文深度工程扩展 (Thesis Extension Suite)
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <button className="btn-ghost" style={{ justifyContent: 'flex-start', padding: '10px 12px', background: 'var(--bg-card-inner)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                    ✨ 全文自然化润色
+                  </button>
+                  <button className="btn-ghost" style={{ justifyContent: 'flex-start', padding: '10px 12px', background: 'var(--bg-card-inner)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                    📚 GOST 参考文献修补
+                  </button>
+                  <button className="btn-ghost" style={{ justifyContent: 'flex-start', padding: '10px 12px', background: 'var(--bg-card-inner)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                    📏 鲍曼/GOST 排版核查
+                  </button>
+                  <button className="btn-ghost" style={{ justifyContent: 'flex-start', padding: '10px 12px', background: 'var(--bg-card-inner)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                    🏗️ 章节逻辑骨架审阅
+                  </button>
                 </div>
               </div>
             )}

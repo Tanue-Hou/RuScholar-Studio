@@ -4,10 +4,10 @@ from rich.console import Console
 
 console = Console()
 
-DEFAULT_MODEL_URL = "https://modelscope.cn/models/Qwen/Qwen3-4B-GGUF/resolve/master/Qwen3-4B-Q5_K_M.gguf"
+DEFAULT_MODEL_URL = "https://modelscope.cn/models/Qwen/Qwen3-8B-GGUF/resolve/master/Qwen3-8B-Q5_K_M.gguf"
 MODEL_URL = os.getenv("RUSCHOLAR_MODEL_URL", DEFAULT_MODEL_URL)
 
-EXPECTED_SIZE = 2889513184
+EXPECTED_SIZE = 5851112224
 
 def download_model(dest_path: str, progress_callback=None):
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)

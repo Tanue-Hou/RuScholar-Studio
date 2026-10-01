@@ -96,7 +96,7 @@ async def analyze_manuscript(
     # 1. Resolve discipline
     if not discipline or discipline == "UNIVERSAL":
         use_cloud = bool(api_key and api_key.strip())
-        actual_engine = ("deepseek-v4-flash" if "flash" in engine_type else "deepseek-v4-pro") if use_cloud else "local"
+        actual_engine = ("deepseek-flash" if "flash" in engine_type else "deepseek-v4-pro") if use_cloud else "local"
         
         try:
             if actual_engine == "local" and not engine_inst:

@@ -1,4 +1,7 @@
-from llama_cpp import Llama
+try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
 import json
 
 def repair_json_string(json_str: str) -> str:
@@ -79,7 +82,7 @@ class StyleJudge:
         if "pro" in engine_type:
             api_engine = "deepseek-v4-pro"
         elif "flash" in engine_type:
-            api_engine = "deepseek-v4-flash"
+            api_engine = "deepseek-flash"
 
         sys_prompt = """You are an academic classifier. Your task is to analyze the provided text snippet from a research paper or thesis and classify it into exactly one of the following academic discipline clusters:
 - SCI_TECH (Physical sciences, engineering, chemistry, physics, excluding automation)
@@ -96,7 +99,7 @@ You must return a JSON object containing exactly one key "discipline" with the c
         
         raw_text = ""
         try:
-            if api_engine in ("deepseek-v4-pro", "deepseek-v4-flash"):
+            if api_engine in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
                 raw_text = self._call_deepseek_api(api_engine, api_key, base_url, sys_prompt, user_prompt)
             else:
                 prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. Write the final JSON object clearly.\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n"
@@ -193,7 +196,7 @@ You must return a JSON object containing exactly one key "discipline" with the c
 
         # Dispatch to appropriate engine
         try:
-            if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash"):
+            if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
                 raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, context_str)
             else:
                 # Fallback to local

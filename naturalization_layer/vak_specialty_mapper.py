@@ -7,14 +7,14 @@ def load_vak_nomenclature() -> list[dict]:
     """
     Load the VAK nomenclature JSON database.
     """
-    # Try various relative locations to be robust
+    env_path = os.getenv("VAK_NOMENCLATURE_PATH")
     possible_paths = [
+        env_path if env_path else "",
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules", "vak_passports_nomenclature.json"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "naturalization_layer", "rules", "vak_passports_nomenclature.json"),
-        "/Users/tanue/Documents/antigravity/friendly-lavoisier/naturalization_layer/rules/vak_passports_nomenclature.json"
     ]
     for path in possible_paths:
-        if os.path.exists(path):
+        if path and os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
     raise FileNotFoundError("Could not locate vak_passports_nomenclature.json database.")
@@ -91,7 +91,7 @@ async def map_vak_specialty(
     use_llm = False
     if llm is not None:
         use_llm = True
-    elif engine_type in ("deepseek-v4-pro", "deepseek-v4-flash") and api_key:
+    elif engine_type in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash") and api_key:
         use_llm = True
         
     if not use_llm:
@@ -126,7 +126,7 @@ You MUST reply strictly in JSON format (no markdown blocks, no think tag in outp
     
     try:
         raw_text = ""
-        if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash"):
+        if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
             from naturalization_layer.llm_judge import StyleJudge
             judge = StyleJudge(None)
             raw_text = judge._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, user_prompt)

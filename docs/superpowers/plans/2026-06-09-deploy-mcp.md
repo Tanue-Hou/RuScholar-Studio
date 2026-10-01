@@ -13,10 +13,10 @@
 ### Task 1: Create project `.env` file
 
 **Files:**
-- Create: `/Users/tanue/Documents/antigravity/friendly-lavoisier/.env`
+- Create: `.env`
 
 - [ ] **Step 1: Copy environment template to `.env`**
-  Write the content matching `.env.example` to `/Users/tanue/Documents/antigravity/friendly-lavoisier/.env`.
+  Write the content matching `.env.example` to `.env`.
   Content:
   ```ini
   # Optional cloud judge provider
@@ -24,8 +24,8 @@
   DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
 
   # Local model and rule resources
-  RUSCHOLAR_MODEL_PATH=models/Qwen3-4B-Q5_K_M.gguf
-  RUSCHOLAR_MODEL_URL=https://modelscope.cn/models/Qwen/Qwen3-4B-GGUF/resolve/master/Qwen3-4B-Q5_K_M.gguf
+  RUSCHOLAR_MODEL_PATH=models/Qwen3-8B-Q5_K_M.gguf
+  RUSCHOLAR_MODEL_URL=https://modelscope.cn/models/Qwen/Qwen3-8B-GGUF/resolve/master/Qwen3-8B-Q5_K_M.gguf
   RUSCHOLAR_RULES_PATH=naturalization_layer/rules/polishing_rules_v5.json
 
   # llama.cpp GPU offload. Use -1 for full offload, 0 for CPU-only fallback.
@@ -33,7 +33,7 @@
 
   # Web UI
   RUSCHOLAR_HOST=0.0.0.0
-  RUSCHOLAR_PORT=8000
+  RUSCHOLAR_PORT=6666
   ```
 
 - [ ] **Step 2: Commit `.env` configuration**
@@ -47,7 +47,7 @@
 ### Task 2: Register MCP server in Antigravity config
 
 **Files:**
-- Modify: `/Users/tanue/.gemini/config/mcp_config.json`
+- Modify: `~/.gemini/config/mcp_config.json`
 
 - [ ] **Step 1: Write MCP server configuration to `mcp_config.json`**
   Write the JSON block to register the server:
@@ -55,14 +55,14 @@
   {
     "mcpServers": {
       "ruscholar-studio": {
-        "command": "/Users/tanue/miniforge3/bin/python3",
+        "command": "python3",
         "args": [
           "-m",
           "mcp_server.server"
         ],
-        "cwd": "/Users/tanue/Documents/antigravity/friendly-lavoisier",
+        "cwd": "/path/to/RuScholar-Studio",
         "env": {
-          "PYTHONPATH": "/Users/tanue/Documents/antigravity/friendly-lavoisier"
+          "PYTHONPATH": "/path/to/RuScholar-Studio"
         }
       }
     }
@@ -78,6 +78,6 @@
 
 - [ ] **Step 1: Run verification command**
   Test running the MCP server standalone in stdio mode to ensure no module loading issues or setup errors.
-  Run: `PYTHONPATH=. /Users/tanue/miniforge3/bin/python3 -m mcp_server.server`
+  Run: `PYTHONPATH=. python3 -m mcp_server.server`
   Wait for: The process to start and wait for JSON-RPC input (no errors printed).
   Then stop the command manually (Ctrl+C).

@@ -437,10 +437,12 @@ def test_mcp_route_workflow():
         
     asyncio.run(run())
 
-def test_mcp_map_vak_specialty():
+@patch("mcp_server.server.get_engines")
+def test_mcp_map_vak_specialty(mock_get_engines):
     import asyncio
     from mcp_server.server import thesis_map_vak_specialty
     
+    mock_get_engines.return_value = (None, None, None)
     async def run():
         res = await thesis_map_vak_specialty(
             topic="Системный анализ и управление обработкой информации",
@@ -454,7 +456,8 @@ def test_mcp_map_vak_specialty():
         
     asyncio.run(run())
 
-def test_mcp_granular_citation_tools():
+@patch("mcp_server.server.get_engines")
+def test_mcp_granular_citation_tools(mock_get_engines):
     import asyncio
     from mcp_server.server import (
         thesis_extract_claims,
@@ -463,6 +466,13 @@ def test_mcp_granular_citation_tools():
         thesis_judge_claim_evidence_nli
     )
     
+    mock_cit = MagicMock()
+    mock_cit.verify_citation.return_value = {
+        "status": "NOT_ENOUGH_INFO",
+        "explanation_zh": "未提供有效佐证片段。",
+        "evidence_snippet": ""
+    }
+    mock_get_engines.return_value = (None, None, mock_cit)
     async def run():
         # 1. Extract claims
         text = "Это тестовое предложение. В работе предложен новый метод [1]. Актуальность темы очевидна."
