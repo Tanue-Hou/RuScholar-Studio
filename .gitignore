@@ -46,3 +46,6 @@ frontend/dist/
 # Runtime exports
 exports/
 reports/
+
+# OneDrive 机器锁（每台机器运行时状态，不入库）
+ai-collab/machine-lock*.json
