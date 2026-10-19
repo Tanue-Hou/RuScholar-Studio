@@ -25,7 +25,7 @@
 | [TASK-0009](tasks/TASK-0009-session-and-security.md) | 会话 TTL、CORS、绑定地址、上传限制 | P2 | 待办 | codex | 0002 |
 | [TASK-0010](tasks/TASK-0010-evaluation-benchmark.md) | 诊断质量评测集 | P2 | 需要 Owner 决策 | claude | — |
 | [TASK-0011](tasks/TASK-0011-placeholder-apis.md) | 501 占位接口立项或删除 | P3 | 需要 Owner 决策 | — | — |
-| [TASK-0012](../docs/03-plans/2026-10-19-umbrella-migration-plan.md) | 迁移到统一大项目 **PHD-Scholar**（OneDrive `个人项目/PHD-Scholar`，机器锁，ADR-0004） | P0 | 进行中：Windows 正在迁移；Mac 已盘点、备份、迁移脚本演练通过，等 Windows 释放锁 | claude | 见 [Mac 准备日志](logs/2026-10-19-claude-mac-migration-prep.md) |
+| [TASK-0012](../docs/03-plans/2026-10-19-umbrella-migration-plan.md) | 迁移到统一大项目 **PHD-Scholar**（OneDrive `个人项目/PHD-Scholar`，机器锁，ADR-0004） | P0 | 基本完成：本仓库已迁入 PHD-Scholar/projects/ruscholar-studio 并提交整理（306fa71）；之后由总项目看板 HUB-0002~0005 跟进 | claude | 见 [Mac 准备日志](logs/2026-10-19-claude-mac-migration-prep.md)、总项目 `ai-collab/logs/2026-10-19-claude-mac-rename-and-import.md` |
 
 ## 已完成
 
