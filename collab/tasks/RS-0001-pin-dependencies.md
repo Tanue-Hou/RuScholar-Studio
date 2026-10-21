@@ -2,9 +2,10 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待办 |
+| 状态 | 待评审 |
+| 分支 | agent/claude/RS-0001-pin-dependencies（b183eef） |
 | 优先级 | P0 |
-| 负责人 | 未分配（建议 codex） |
+| 负责人 | claude@mac |
 | 评审人 | claude |
 | 关联需求 | 技术债 |
 
@@ -24,3 +25,8 @@
 - [ ] 全新 venv：`pip install -r requirements.txt && python -m spacy download ru_core_news_sm && pytest -q` 全部通过（无 llama-cpp 时 llm_judge 显示 skipped）
 
 ## 验证记录
+
+## 验证记录（2026-10-21，claude@mac，云端 Python 3.13 全新环境，未装 llama-cpp）
+- 依赖加上界；`mcp>=1.0,<2`（装到 1.30.0）；`pymorphy3>=2.0,<3`；新增 `requirements-dev.txt`（pytest），setup 脚本改装它。
+- `test_llm_judge.py` 缺 llama-cpp 时跳过；spaCy 模型只加载一次，缺失时打印一次明确警告（已用模拟加载失败验证）。
+- `pytest -q`：55 passed, 1 skipped；MCP 服务可启动，17 个工具。

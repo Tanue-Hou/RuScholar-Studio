@@ -2,9 +2,10 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待办（已批准） |
+| 状态 | 待评审 |
+| 分支 | agent/claude/RS-0002-unify-config（a255e06，基于 RS-0001） |
 | 优先级 | P0 |
-| 负责人 | 未分配（建议 codex） |
+| 负责人 | claude@mac |
 | 评审人 | claude |
 | 关联需求 | 技术债 |
 
@@ -32,3 +33,9 @@
 ## Owner 决定（2026-10-21 11:19）
 - 端口统一为 **8000**：后端默认、`.env.example`、`frontend/vite.config.ts` 代理、README 一致。
 - 实施批准：Owner 授权"先完成现有工作"。
+
+## 验证记录（2026-10-21，claude@mac）
+- 新增 `services/config.py`：读取 `.env`（已存在的环境变量优先）、相对路径按项目根目录解析、模型按 环境变量 → `models/` → `../../data/models/`（先 8B 后 4B）查找、端口默认 8000。
+- 端口统一 8000（`.env.example`、vite 代理、脚本、文档）；README（中俄英）与脚本中的旧 4B 默认值改为 8B。
+- `pytest -q`：61 passed, 1 skipped（新增 6 个配置测试）。
+- 端到端：从 `/tmp` 启动后端，找到 `../../data/models` 中的 8B 模型，`/api/check_model` 返回 true；Vite 开发服务器把 `/api` 代理到 8000 成功。

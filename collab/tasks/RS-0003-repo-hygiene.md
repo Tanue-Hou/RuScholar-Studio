@@ -2,9 +2,10 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 部分批准（claude 判断，Owner 授权代为决定） |
+| 状态 | 待评审（第 1、2 项） |
+| 分支 | agent/claude/RS-0003-repo-hygiene（2319bfa，基于 RS-0002） |
 | 优先级 | P0 |
-| 负责人 | 未分配 |
+| 负责人 | claude@mac |
 | 评审人 | Owner |
 | 关联需求 | 技术债 |
 
@@ -30,3 +31,7 @@
 2. 添加 MIT `LICENSE`：**做**（README 已声明 MIT，补齐文件）。
 3. 分支收敛：**以 `main` 为唯一主干**。核实结果：`main`、`master`、`origin/*` 都停在 `078365e`，没有独有提交；`feature/style-diagnostics` 领先。RS-0001/0002 验收后把 feature 快进合并到 `main`；`master` 在下次推送时删除远端分支（推送需 Owner 确认）。
 4. **论文引言草稿已在 GitHub 公开**（`origin/main`、`origin/master`、`origin/feature/style-diagnostics` 都含 `docs/superpowers/plans/纵横垂协同控制论文引言_*.md`）。判断：应从历史中清除，避免未发表论文文本公开、日后查重误判。改写历史并强制推送不可撤销，另立 RS-0014，由 claude 准备、**Owner 确认后才推送**。
+
+## 验证记录（2026-10-21，claude@mac）
+- 第 1 项：`git rm --cached` 5 个 scratch 条目（文件仍在磁盘，私有副本在 `../../data/private/ruscholar-scratch/`）。第 2 项：新增 MIT `LICENSE`。`pytest -q`：61 passed, 1 skipped。
+- 第 3 项（以 main 为主干）：等 RS-0001～0003 验收后，把 feature 与三个任务分支依次快进合并到 `main`；第 4 项见 RS-0014。
