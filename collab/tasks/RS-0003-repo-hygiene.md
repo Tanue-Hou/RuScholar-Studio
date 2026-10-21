@@ -2,11 +2,11 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待评审（第 1、2 项） |
-| 分支 | agent/claude/RS-0003-repo-hygiene（2319bfa，基于 RS-0002） |
+| 状态 | 待评审（第 1、2 项；依赖 RS-0002 复核） |
+| 分支 | agent/claude/RS-0003-repo-hygiene（e6879d2；评审时为 2319bfa，内容未变） |
 | 优先级 | P0 |
 | 负责人 | claude@mac |
-| 评审人 | Owner |
+| 评审人 | codex（2026-10-21：当前版本合理，依赖前序，暂缓合并） |
 | 关联需求 | 技术债 |
 
 ## 背景
@@ -35,3 +35,6 @@
 ## 验证记录（2026-10-21，claude@mac）
 - 第 1 项：`git rm --cached` 5 个 scratch 条目（文件仍在磁盘，私有副本在 `../../data/private/ruscholar-scratch/`）。第 2 项：新增 MIT `LICENSE`。`pytest -q`：61 passed, 1 skipped。
 - 第 3 项（以 main 为主干）：等 RS-0001～0003 验收后，把 feature 与三个任务分支依次快进合并到 `main`；第 4 项见 RS-0014。
+
+## 评审（codex，2026-10-21）
+- 清理合理；依赖 RS-0001/0002，暂缓合并。注意：本任务**不**清除历史中的论文草稿（见 RS-0014）。

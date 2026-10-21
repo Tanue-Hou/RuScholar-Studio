@@ -5,10 +5,10 @@
 ## P0
 | 任务 | 内容 | 状态 | 负责 | 依赖 |
 | --- | --- | --- | --- | --- |
-| [RS-0001](tasks/RS-0001-pin-dependencies.md) | 依赖漂移（`mcp<2`、pymorphy3、pytest、spaCy 提示） | 待评审（分支 RS-0001） | claude@mac；评审建议 codex | — |
-| [RS-0002](tasks/RS-0002-unify-config.md) | 统一配置：`.env`、端口 **8000**、模型读 `data/models` | 待评审（分支 RS-0002） | claude@mac；评审建议 codex | RS-0001 |
-| [RS-0014](tasks/RS-0014-purge-thesis-drafts.md) | **论文引言草稿在 GitHub 公开**：清除演练已通过，等 Owner 确认后执行并强制推送 | 需要 Owner 决策 | claude@mac | RS-0001～0003 合并后 |
-| [RS-0003](tasks/RS-0003-repo-hygiene.md) | 仓库卫生：scratch 取消跟踪、补 LICENSE；之后以 main 为主干 | 待评审（分支 RS-0003） | claude@mac；评审建议 codex | — |
+| [RS-0001](tasks/RS-0001-pin-dependencies.md) | 依赖漂移（`mcp<2`、pymorphy3、pytest、spaCy 提示） | 待验收（codex 评审通过） | claude@mac / 评审 codex | — |
+| [RS-0002](tasks/RS-0002-unify-config.md) | 统一配置：`.env`、端口 **8000**、模型读 `data/models` | 待复核（评审问题已修复 b212dd5） | claude@mac / 评审 codex | RS-0001 |
+| [RS-0014](tasks/RS-0014-purge-thesis-drafts.md) | **论文引言草稿在 GitHub 公开**：演练已通过；需先暂设私有，强推后还要清 GitHub 缓存/PR 引用、各设备重新克隆；等 Owner 确认 | 需要 Owner 决策 | claude@mac | RS-0001～0003 合并后 |
+| [RS-0003](tasks/RS-0003-repo-hygiene.md) | 仓库卫生：scratch 取消跟踪、补 LICENSE；之后以 main 为主干 | 待评审（依赖 RS-0002 复核） | claude@mac / 评审 codex | RS-0002 |
 
 ## P1
 | 任务 | 内容 | 状态 | 负责 | 依赖 |
@@ -28,4 +28,4 @@
 
 已完成：RS-0000（仓库整理）、RS-0012（迁入 PHD-Scholar）。旧编号 TASK-00xx 与 RS-00xx 一一对应；旧看板在 `archive/`。
 
-合并顺序（Owner 验收后）：RS-0001 → RS-0002 → RS-0003 依次快进合并到 `main`，再执行 RS-0014。RS-0013 基线已完成（见任务卡）。
+合并顺序（Owner 验收后）：先把 feature（含全部看板与任务卡提交）合并到 `main`，再把 RS-0001 → RS-0002 → RS-0003 **变基到 main 最新提交后**依次快进合并，最后执行 RS-0014。看板与任务卡只在 feature/main 上更新，不放进任务分支。RS-0013 基线已记录，待验收。三个分支已变基到 `c4e7721` 之上，合并时文档提交不会丢。

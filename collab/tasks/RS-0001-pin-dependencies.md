@@ -2,11 +2,11 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待评审 |
-| 分支 | agent/claude/RS-0001-pin-dependencies（b183eef） |
+| 状态 | 待验收 |
+| 分支 | agent/claude/RS-0001-pin-dependencies（e5f75af；评审时为 b183eef，变基到 c4e7721 后 range-diff 内容一致） |
 | 优先级 | P0 |
 | 负责人 | claude@mac |
-| 评审人 | claude |
+| 评审人 | codex（2026-10-21：通过） |
 | 关联需求 | 技术债 |
 
 ## 背景
@@ -30,3 +30,7 @@
 - 依赖加上界；`mcp>=1.0,<2`（装到 1.30.0）；`pymorphy3>=2.0,<3`；新增 `requirements-dev.txt`（pytest），setup 脚本改装它。
 - `test_llm_judge.py` 缺 llama-cpp 时跳过；spaCy 模型只加载一次，缺失时打印一次明确警告（已用模拟加载失败验证）。
 - `pytest -q`：55 passed, 1 skipped；MCP 服务可启动，17 个工具。
+
+## 评审（codex，2026-10-21，由 Owner 转交）
+- 结论：未发现阻断性问题，可进入验收。评审方本机测试 57 passed / 1 skipped（已有环境）。
+- 尚未验证：全新安装、Windows、Mac 本机 llama-cpp（Metal）。

@@ -2,11 +2,11 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待评审 |
-| 分支 | agent/claude/RS-0002-unify-config（a255e06，基于 RS-0001） |
+| 状态 | 待复核 |
+| 分支 | agent/claude/RS-0002-unify-config（8300470 + 修复 b212dd5；评审时为 a255e06） |
 | 优先级 | P0 |
 | 负责人 | claude@mac |
-| 评审人 | claude |
+| 评审人 | codex（2026-10-21：暂不通过 → 已修复，待复核） |
 | 关联需求 | 技术债 |
 
 ## 背景
@@ -39,3 +39,10 @@
 - 端口统一 8000（`.env.example`、vite 代理、脚本、文档）；README（中俄英）与脚本中的旧 4B 默认值改为 8B。
 - `pytest -q`：61 passed, 1 skipped（新增 6 个配置测试）。
 - 端到端：从 `/tmp` 启动后端，找到 `../../data/models` 中的 8B 模型，`/api/check_model` 返回 true；Vite 开发服务器把 `/api` 代理到 8000 成功。
+
+## 评审（codex，2026-10-21）与修复
+- 问题 1：前端代理写死 8000，后端读 `.env`（现有 6666）→ 请求失败。修复：`frontend/vite.config.ts` 读取同一份项目根 `.env` 的 `RUSCHOLAR_PORT`（环境变量优先，默认 8000）。
+- 问题 2：旧 `.env` 的 `RUSCHOLAR_MODEL_PATH` 指向已不存在的项目内模型，挡住 `data/models` 的查找。修复：配置的文件不存在时警告并改用自动查找到的模型。
+- 修复提交 `b212dd5`；新增 3 个测试，共 64 passed / 1 skipped；tsc、vite build 通过。
+- 端到端：旧 `.env`（6666 + 失效模型路径）与无 `.env`（8000）两种情况下，后端与 Vite 代理端口一致，`/api/check_model` 均找到 `../../data/models` 中的模型。
+- 本机 `.env` 迁移（不在 Git 中）：已按 Owner 决定把 `RUSCHOLAR_PORT` 改为 8000、清空失效的 `RUSCHOLAR_MODEL_PATH`；原文件备份为 `.env.bak-20261021`。
