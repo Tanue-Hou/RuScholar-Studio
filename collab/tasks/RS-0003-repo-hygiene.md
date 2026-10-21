@@ -2,7 +2,7 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 需要 Owner 决策 |
+| 状态 | 部分批准（claude 判断，Owner 授权代为决定） |
 | 优先级 | P0 |
 | 负责人 | 未分配 |
 | 评审人 | Owner |
@@ -24,3 +24,9 @@
 - [ ] `git ls-files scratch` 为空；LICENSE 存在；远端只剩 `main` + 进行中的任务分支
 
 ## 验证记录
+
+## 决定（2026-10-21，Owner 授权 claude 判断）
+1. `git rm -r --cached scratch`：**做**（可回退，scratch 已在 .gitignore）。
+2. 添加 MIT `LICENSE`：**做**（README 已声明 MIT，补齐文件）。
+3. 分支收敛：**以 `main` 为唯一主干**。核实结果：`main`、`master`、`origin/*` 都停在 `078365e`，没有独有提交；`feature/style-diagnostics` 领先。RS-0001/0002 验收后把 feature 快进合并到 `main`；`master` 在下次推送时删除远端分支（推送需 Owner 确认）。
+4. **论文引言草稿已在 GitHub 公开**（`origin/main`、`origin/master`、`origin/feature/style-diagnostics` 都含 `docs/superpowers/plans/纵横垂协同控制论文引言_*.md`）。判断：应从历史中清除，避免未发表论文文本公开、日后查重误判。改写历史并强制推送不可撤销，另立 RS-0014，由 claude 准备、**Owner 确认后才推送**。
