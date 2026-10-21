@@ -1,8 +1,8 @@
-# TASK-0004：建立 CI（GitHub Actions）
+# RS-0004：建立 CI（GitHub Actions）
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待办（依赖 TASK-0001） |
+| 状态 | 待办（依赖 RS-0001） |
 | 优先级 | P1 |
 | 负责人 | 未分配（建议 codex） |
 | 评审人 | claude |

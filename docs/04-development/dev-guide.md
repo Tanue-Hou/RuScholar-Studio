@@ -28,17 +28,17 @@ python -m mcp_server.server               # MCP
 
 | 问题 | 临时规避 | 修复任务 |
 | --- | --- | --- |
-| `pip install mcp` 会装 2.x，`mcp.server.fastmcp` 不存在 | `pip install "mcp<2"` | TASK-0001 |
-| `.env` 不会被自动读取 | 启动前 `set -a; source .env; set +a` | TASK-0002 |
-| 后端默认 8000，vite 代理到 6666 | 开发模式下 `RUSCHOLAR_PORT=6666 python backend/main.py` | TASK-0002 |
-| 没装 llama-cpp 时 `tests/test_llm_judge.py` 收集失败 | `pytest --ignore=tests/test_llm_judge.py` | TASK-0001 |
+| `pip install mcp` 会装 2.x，`mcp.server.fastmcp` 不存在 | `pip install "mcp<2"` | RS-0001 |
+| `.env` 不会被自动读取 | 启动前 `set -a; source .env; set +a` | RS-0002 |
+| 后端默认 8000，vite 代理到 6666 | 开发模式下 `RUSCHOLAR_PORT=6666 python backend/main.py` | RS-0002 |
+| 没装 llama-cpp 时 `tests/test_llm_judge.py` 收集失败 | `pytest --ignore=tests/test_llm_judge.py` | RS-0001 |
 | `.venv` 是 macOS 生成的，不能跨机器使用 | 每台机器各自建 venv | — |
 
 ## 4. 分支与提交
 
 - 主干：`main`（受保护，只通过 PR 合入）
 - 任务分支：`agent/<codex|claude|antigravity>/TASK-xxxx-<slug>`；Owner 自己的分支：`owner/<slug>`
-- 提交：Conventional Commits，结尾带任务号，例如 `fix(deps): pin mcp<2 (TASK-0001)`
+- 提交：Conventional Commits，结尾带任务号，例如 `fix(deps): pin mcp<2 (RS-0001)`
 - 一个 PR 只做一个任务；PR 描述链接任务卡与评审记录
 
 ## 5. 代码规范
@@ -51,7 +51,7 @@ python -m mcp_server.server               # MCP
 - 禁止 `sys.path.append` 式导入出现在新代码中（存量脚本除外）
 
 **前端**
-- TypeScript 严格模式；API 调用集中在 `src/api/`（TASK-0007 后）
+- TypeScript 严格模式；API 调用集中在 `src/api/`（RS-0007 后）
 - 与后端 SSE 字段的类型定义保持一致（见架构文档第 2 节契约）
 
 **数据资产**

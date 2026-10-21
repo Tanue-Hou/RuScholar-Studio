@@ -45,20 +45,20 @@ RuScholar Studio（前身 PhD Thesis Butler 的工程执行层）是面向俄语
 - 测试覆盖面广（规则、PPL、RAG/NLI、ГОСТ、ВАК、MCP 端到端），除需 llama-cpp 的 3 个用例外 55/55 通过。
 - 设计文档有沉淀（4 份 spec、2 份 plan）。
 
-### 主要问题（已全部转为任务卡，见 `ai-collab/board.md`）
+### 主要问题（已全部转为任务卡，见 `collab/board.md`）
 | 类别 | 问题 | 任务 |
 | --- | --- | --- |
-| 可安装性 | `mcp>=1.0.0` 会装到 2.x 导致 MCP 无法导入；spaCy 模型缺失时规则引擎静默降级 | TASK-0001 |
-| 配置 | 代码不读取 `.env`；端口 8000 / 6666 三处不一致；README 仍写 Qwen3-4B | TASK-0002 |
-| 仓库卫生 | 被忽略的 `scratch/` 仍有文件被跟踪；个人论文草稿曾进入公开仓库历史；无 LICENSE；main/master 并存 | TASK-0003 |
-| 工程化 | 无 CI、无 lint 门禁 | TASK-0004 |
-| 代码重复 | 诊断流水线 local/cloud、stream/batch 大量复制；规则/校准加载和关键词兜底在 backend 与 service 重复 | TASK-0005 |
-| 性能 | PPL 用纯 Python 遍历整个词表做 softmax | TASK-0006 |
-| 前端可维护性 | 1361 行单组件 | TASK-0007 |
-| MCP 可维护性 | 1195 行单文件，业务逻辑混在工具里 | TASK-0008 |
-| 稳定/安全 | 内存会话无过期；CORS `*` + credentials；默认绑定 0.0.0.0；上传无大小限制 | TASK-0009 |
-| 可信度 | 阈值与 README 中的量化宣称缺少可复现评测 | TASK-0010 |
-| 范围 | 4 个 501 占位接口 | TASK-0011 |
+| 可安装性 | `mcp>=1.0.0` 会装到 2.x 导致 MCP 无法导入；spaCy 模型缺失时规则引擎静默降级 | RS-0001 |
+| 配置 | 代码不读取 `.env`；端口 8000 / 6666 三处不一致；README 仍写 Qwen3-4B | RS-0002 |
+| 仓库卫生 | 被忽略的 `scratch/` 仍有文件被跟踪；个人论文草稿曾进入公开仓库历史；无 LICENSE；main/master 并存 | RS-0003 |
+| 工程化 | 无 CI、无 lint 门禁 | RS-0004 |
+| 代码重复 | 诊断流水线 local/cloud、stream/batch 大量复制；规则/校准加载和关键词兜底在 backend 与 service 重复 | RS-0005 |
+| 性能 | PPL 用纯 Python 遍历整个词表做 softmax | RS-0006 |
+| 前端可维护性 | 1361 行单组件 | RS-0007 |
+| MCP 可维护性 | 1195 行单文件，业务逻辑混在工具里 | RS-0008 |
+| 稳定/安全 | 内存会话无过期；CORS `*` + credentials；默认绑定 0.0.0.0；上传无大小限制 | RS-0009 |
+| 可信度 | 阈值与 README 中的量化宣称缺少可复现评测 | RS-0010 |
+| 范围 | 4 个 501 占位接口 | RS-0011 |
 
 ### 隐私说明（需与 README 表述对齐）
 本地模式下论文正文不出本机；但引文审计在本地没有对应 PDF 时，会用参考文献条目（标题/作者/年份）查询 OpenAlex。hybrid/cloud 模式会把句子发送给 DeepSeek。README 的"完全离线"应限定为 `local` 模式且未启用在线检索。

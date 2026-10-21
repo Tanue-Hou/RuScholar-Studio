@@ -12,7 +12,7 @@
 
 - AI 助手（Codex / Claude / Antigravity）入口规则：[`AGENTS.md`](AGENTS.md)
 - 文档中心（需求 → 设计 → 计划 → 开发 → 测试 → 发布）：[`docs/README.md`](docs/README.md)
-- 任务看板与协作记录：[`ai-collab/board.md`](ai-collab/board.md)
+- 任务看板与协作记录：[`collab/board.md`](collab/board.md)
 - 变更记录：[`CHANGELOG.md`](CHANGELOG.md)
 
 ---

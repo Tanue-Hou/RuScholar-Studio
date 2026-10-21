@@ -65,7 +65,7 @@ flowchart TB
 | GET | `/api/diagnose` | SSE 诊断流 |
 | GET | `/api/check_model` | 本地模型是否存在 |
 | GET | `/api/download_model` | SSE 下载进度 |
-| POST | `/api/polish` `/api/references` `/api/format` `/api/structure` | 501 占位（TASK-0011） |
+| POST | `/api/polish` `/api/references` `/api/format` `/api/structure` | 501 占位（RS-0011） |
 | GET | `/` | 托管 `frontend/dist` |
 
 ## 4. MCP 工具（17 个，统一返回 `{summary, findings, evidence, next_actions}`）
@@ -82,12 +82,12 @@ flowchart TB
 ## 5. 配置
 
 环境变量见 `.env.example`：`DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL / RUSCHOLAR_MODEL_PATH / RUSCHOLAR_MODEL_URL / RUSCHOLAR_RULES_PATH / RUSCHOLAR_GPU_LAYERS / RUSCHOLAR_HOST / RUSCHOLAR_PORT`。
-⚠️ 当前代码不会自动加载 `.env`（TASK-0002）。
+⚠️ 当前代码不会自动加载 `.env`（RS-0002）。
 
 ## 6. 状态与并发
-- 会话与文献缓存：进程内 dict（`active_sessions` 在诊断结束后清除；`session_references` 不清除，TASK-0009）
+- 会话与文献缓存：进程内 dict（`active_sessions` 在诊断结束后清除；`session_references` 不清除，RS-0009）
 - 模型实例：模块级全局变量懒加载，Web 与 MCP 进程各自持有一份
 - 本地推理：`asyncio.Lock` 串行；云端调用并发（每批 3 句）
 
 ## 7. 已知设计债
-见 `docs/00-overview/project-overview.md` 第 4 节与 `ai-collab/board.md`。
+见 `docs/00-overview/project-overview.md` 第 4 节与 `collab/board.md`。

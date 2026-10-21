@@ -1,6 +1,6 @@
 # RuScholar Studio 文档中心
 
-按软件研发生命周期编号组织。过程性记录（看板、任务卡、交接、日志）不在这里，见 [`../ai-collab/`](../ai-collab/README.md)。
+按软件研发生命周期编号组织。过程性记录（看板、任务卡、交接、日志）不在这里，见 [`../collab/`](../collab/README.md)。
 
 | 目录 | 阶段 | 内容 | 入口 |
 | --- | --- | --- | --- |
@@ -17,7 +17,7 @@
 
 - 设计规约 / 实施计划：`YYYY-MM-DD-<kebab-slug>.md`
 - 需求单：`REQ-xxxx-<slug>.md`；ADR：`ADR-xxxx-<slug>.md`
-- 模板统一在 `ai-collab/templates/`
+- 模板统一在 `collab/templates/`
 
 ## 历史说明
 
