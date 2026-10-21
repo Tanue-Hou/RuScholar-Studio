@@ -3,10 +3,10 @@
 | 字段 | 值 |
 | --- | --- |
 | 状态 | 待复核 |
-| 分支 | agent/claude/RS-0002-unify-config（8300470 + 修复 b212dd5；评审时为 a255e06） |
+| 分支 | agent/claude/RS-0002-unify-config（8300470 + b212dd5 + c135686） |
 | 优先级 | P0 |
 | 负责人 | claude@mac |
-| 评审人 | codex（2026-10-21：暂不通过 → 已修复，待复核） |
+| 评审人 | codex（第二轮：P2 配置来源不一致 → 已修复 c135686，待复核） |
 | 关联需求 | 技术债 |
 
 ## 背景
@@ -46,3 +46,8 @@
 - 修复提交 `b212dd5`；新增 3 个测试，共 64 passed / 1 skipped；tsc、vite build 通过。
 - 端到端：旧 `.env`（6666 + 失效模型路径）与无 `.env`（8000）两种情况下，后端与 Vite 代理端口一致，`/api/check_model` 均找到 `../../data/models` 中的模型。
 - 本机 `.env` 迁移（不在 Git 中）：已按 Owner 决定把 `RUSCHOLAR_PORT` 改为 8000、清空失效的 `RUSCHOLAR_MODEL_PATH`；原文件备份为 `.env.bak-20261021`。
+
+## 第二轮复核（codex）与修复
+- 问题（P2）：Vite 的 `loadEnv` 还会读 `.env.local`、`.env.<mode>`，Python 只读 `.env`；复现为代理 9002、后端 6666。
+- 修复 `c135686`：`vite.config.ts` 不再用 `loadEnv`，按与 `services/config.py` 相同的规则只读项目根 `.env`（重复的键以第一次为准）；空端口两边都退回 8000。
+- 验证：66 passed / 1 skipped；tsc、eslint 通过。端到端：`.env`=6666 + `.env.local`=9002 + `.env.development`=9003 → 两边都是 6666；空端口 → 8000；命令行 `RUSCHOLAR_PORT=7001` → 7001。

@@ -11,7 +11,7 @@
 不要读：其他项目、`../../hub/`、`collab/archive/`、`collab/logs/` 里的旧日志、`scratch/`、`legacy/`。需要背景时再按下面"资料"按需读。
 
 ## 全局必知（全文见 ../../AGENTS.md）
-- 拿锁：在 PHD-Scholar 根目录运行 `tools/onedrive/session-start.sh RS <助手> RS-xxxx`；收工 `tools/onedrive/session-end.sh RS <助手>`。锁在别人手上就只读。
+- 拿锁：在 PHD-Scholar 根目录运行 `tools/onedrive/session-start.sh RS <助手> RS-xxxx`；收工 `tools/onedrive/session-end.sh RS <助手> --session <会话号>`（会话号开工时打印）。锁在别人手上就只读。
 - 一个任务一个分支：`agent/<助手>/RS-xxxx-<描述>`；提交信息带任务号；任务卡上没有 Owner 批准不开工。
 - 日志：`collab/logs/YYYY-MM-DD-<助手>@<机器>-RS-xxxx.md`（≤ 25 行，写原因、验证、遗留、提交号）。换人或换设备写 `collab/handoffs/`。
 - 不改其他项目；不提交私有内容；看到 OneDrive 冲突副本就停。

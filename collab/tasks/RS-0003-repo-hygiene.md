@@ -3,7 +3,7 @@
 | 字段 | 值 |
 | --- | --- |
 | 状态 | 待评审（第 1、2 项；依赖 RS-0002 复核） |
-| 分支 | agent/claude/RS-0003-repo-hygiene（e6879d2；评审时为 2319bfa，内容未变） |
+| 分支 | agent/claude/RS-0003-repo-hygiene（3fe6d5a，基于 RS-0002 最新） |
 | 优先级 | P0 |
 | 负责人 | claude@mac |
 | 评审人 | codex（2026-10-21：当前版本合理，依赖前序，暂缓合并） |
