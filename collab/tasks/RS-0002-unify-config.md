@@ -2,11 +2,11 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待复核 |
-| 分支 | agent/claude/RS-0002-unify-config（8300470 + b212dd5 + c135686） |
+| 状态 | 待验收（Owner 直接授权 Codex 收尾，定向测试通过，不再转交助手评审） |
+| 分支 | agent/codex/RS-0002-port-final（整合前序任务分支与 feature 文档） |
 | 优先级 | P0 |
-| 负责人 | claude@mac |
-| 评审人 | codex（第二轮：P2 配置来源不一致 → 已修复 c135686，待复核） |
+| 负责人 | claude@mac（前序）；codex@mac（本轮收尾） |
+| 验收人 | Owner（本轮按直接指令修复并自测，不再转交助手评审） |
 | 关联需求 | 技术债 |
 
 ## 背景
@@ -51,3 +51,10 @@
 - 问题（P2）：Vite 的 `loadEnv` 还会读 `.env.local`、`.env.<mode>`，Python 只读 `.env`；复现为代理 9002、后端 6666。
 - 修复 `c135686`：`vite.config.ts` 不再用 `loadEnv`，按与 `services/config.py` 相同的规则只读项目根 `.env`（重复的键以第一次为准）；空端口两边都退回 8000。
 - 验证：66 passed / 1 skipped；tsc、eslint 通过。端到端：`.env`=6666 + `.env.local`=9002 + `.env.development`=9003 → 两边都是 6666；空端口 → 8000；命令行 `RUSCHOLAR_PORT=7001` → 7001。
+
+## Owner 直接授权收尾（2026-10-21，codex@mac）
+- 批准：直接修好剩余锁和端口问题、做好日志及针对性测试，不再反复转交评审。
+- 分支 `agent/codex/RS-0002-port-final`：保留 feature 文档并接入 RS-0001～0003 累积提交。
+- 空 shell 变量存在时优先于文件，再回退 8000；新增实际 TS/Python 解析器行为测试。
+- `npm run test:config`：8 项通过（含空 shell 覆盖、local/mode 忽略等）；累计 `pytest`：68 passed / 1 skipped，退出码 0。使用既有本机环境，临时副本运行；未验证全新安装、Windows、Metal。
+- `npm run build`：TypeScript 与 Vite 构建通过，构建产物仅留临时目录。

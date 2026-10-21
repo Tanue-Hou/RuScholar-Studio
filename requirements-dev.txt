@@ -1,0 +1,3 @@
+# 开发与测试依赖（RS-0001）
+-r requirements.txt
+pytest>=8,<10

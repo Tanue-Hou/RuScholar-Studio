@@ -82,7 +82,7 @@ flowchart TB
 ## 5. 配置
 
 环境变量见 `.env.example`：`DEEPSEEK_API_KEY / DEEPSEEK_BASE_URL / RUSCHOLAR_MODEL_PATH / RUSCHOLAR_MODEL_URL / RUSCHOLAR_RULES_PATH / RUSCHOLAR_GPU_LAYERS / RUSCHOLAR_HOST / RUSCHOLAR_PORT`。
-⚠️ 当前代码不会自动加载 `.env`（RS-0002）。
+`.env` 由 `services/config.py` 在 `services` 包导入时自动读取，已存在的环境变量优先；相对路径按项目根目录解析。端口默认 8000。
 
 ## 6. 状态与并发
 - 会话与文献缓存：进程内 dict（`active_sessions` 在诊断结束后清除；`session_references` 不清除，RS-0009）

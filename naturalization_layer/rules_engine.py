@@ -1,4 +1,24 @@
 import spacy
+import sys
+
+_NLP = None
+_NLP_FAILED = False
+
+def _get_nlp():
+    """只加载一次 spaCy 俄语模型；加载失败时明确提示一次，并退回简易分句。"""
+    global _NLP, _NLP_FAILED
+    if _NLP is None and not _NLP_FAILED:
+        try:
+            _NLP = spacy.load("ru_core_news_sm")
+        except Exception as e:
+            _NLP_FAILED = True
+            print(
+                f"[RuScholar] 警告：无法加载 spaCy 俄语模型 ru_core_news_sm（{e}）。"
+                "规则引擎将退回简易分句，名词链、被动语态等检测会失准。"
+                "请运行：python -m spacy download ru_core_news_sm",
+                file=sys.stderr,
+            )
+    return _NLP
 import re
 
 class TextPreprocessor:
@@ -110,7 +130,9 @@ def analyze_text_rules(text: str) -> dict:
             break
             
     try:
-        nlp = spacy.load("ru_core_news_sm")
+        nlp = _get_nlp()
+        if nlp is None:
+            raise RuntimeError("spaCy model unavailable")
         doc = nlp(protected_text)
         sentences_doc = list(doc.sents)
     except Exception:
