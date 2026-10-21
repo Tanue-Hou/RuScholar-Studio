@@ -1,26 +1,22 @@
 # RS-0002：统一配置管理（.env、端口、模型名）
-
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待验收（Owner 直接授权 Codex 收尾，定向测试通过，不再转交助手评审） |
+| 状态 | 已完成（本轮 Owner 批准现状定型并合入 main；平台验证另列） |
 | 分支 | agent/codex/RS-0002-port-final（整合前序任务分支与 feature 文档） |
 | 优先级 | P0 |
 | 负责人 | claude@mac（前序）；codex@mac（本轮收尾） |
 | 验收人 | Owner（本轮按直接指令修复并自测，不再转交助手评审） |
 | 关联需求 | 技术债 |
-
 ## 背景
 - 代码中没有任何 `load_dotenv()` 调用，`.env` 实际**不会被读取**，只有手动 export 才生效。
 - 后端默认端口 8000（`backend/main.py`），`.env` 写 6666，`frontend/vite.config.ts` 代理到 6666，README 写 8000 —— 三处不一致，按 README 启动时前端开发模式连不上后端。
 - `services/shared_state.py` 默认 Qwen3-8B，README、`scripts/style_diagnostics.py`、`scripts/manual_test_judge.py` 仍写 Qwen3-4B。
 - 规则/校准文件路径在 `backend/main.py` 与 `services/diagnostic_service.py` 各自重复加载。
-
 ## 要做的事
 - [ ] 新建 `services/config.py`（pydantic-settings 或 python-dotenv）集中读取全部 `RUSCHOLAR_*` 与 `DEEPSEEK_*` 变量
 - [ ] 后端、MCP、脚本统一从 config 取值；删除重复的规则/校准加载
 - [ ] 端口统一（建议 Owner 决定 8000 还是 6666），vite 代理与 README 同步
 - [ ] README 中模型名、下载命令同步到 8B
-
 ## 影响范围
 `services/shared_state.py`、`backend/main.py`、`services/diagnostic_service.py`、`mcp_server/server.py`、`frontend/vite.config.ts`、`README.md`、`scripts/*`
 
@@ -58,3 +54,7 @@
 - 空 shell 变量存在时优先于文件，再回退 8000；新增实际 TS/Python 解析器行为测试。
 - `npm run test:config`：8 项通过（含空 shell 覆盖、local/mode 忽略等）；累计 `pytest`：68 passed / 1 skipped，退出码 0。使用既有本机环境，临时副本运行；未验证全新安装、Windows、Metal。
 - `npm run build`：TypeScript 与 Vite 构建通过，构建产物仅留临时目录。
+
+## Owner 验收与合并（2026-10-21）
+- Owner 明确“这两项我验收通过”，授权合并修复到主分支、更新日志状态，并按现状定型；`81cb8f4` 已快进合入 `main`，包含本任务前序代码。
+- 保留原任务分支及全部历史；Windows、全新安装、Metal 与 RS-0014 分别管理，不因本次合并视为通过。

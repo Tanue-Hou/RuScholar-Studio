@@ -51,10 +51,11 @@ cd frontend && npm run test:config  # 实际 TS/Python 配置一致性；可设�
 - 模型在 `../../data/models/`（自动查找），草稿在 `../../data/private/ruscholar-scratch/`。
 
 ## Git
-- 仓库根：本目录；当前分支 `feature/style-diagnostics`（另有 `main`、`master`，收敛见 RS-0003）；远端 `Tanue-Hou/RuScholar-Studio`（公开）。
+- 仓库根：本目录；开发主干 `main`；新工作从 main 建任务分支；旧 feature/master 与任务分支保留供追溯；远端 `Tanue-Hou/RuScholar-Studio`（公开）。
 - 当前提交负责人：持有 RS 锁的助手。推送远端需 Owner 批准。
 
 ## 资料（需要时再读）
+- [当前开发定型基线](docs/00-overview/development-baseline.md)
 - 项目总览与现状评估：`docs/00-overview/project-overview.md`
 - 架构、API、SSE 字段契约、MCP 工具：`docs/02-design/architecture.md`
 - 开发与测试指南：`docs/04-development/dev-guide.md`、`docs/05-testing/test-strategy.md`
