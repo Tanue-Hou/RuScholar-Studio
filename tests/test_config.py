@@ -63,3 +63,24 @@ def test_default_port_is_8000(monkeypatch):
     assert config.server_port() == 8000
     monkeypatch.setenv("RUSCHOLAR_PORT", "9001")
     assert config.server_port() == 9001
+
+
+def test_stale_model_env_falls_back_to_found_model(tmp_path, monkeypatch, capsys):
+    shared = tmp_path / "data_models"
+    shared.mkdir()
+    (shared / "Qwen3-8B-Q5_K_M.gguf").write_text("8b")
+    monkeypatch.setattr(config, "model_search_dirs", lambda: [str(tmp_path / "models"), str(shared)])
+    monkeypatch.setenv("RUSCHOLAR_MODEL_PATH", "models/Qwen3-8B-Q5_K_M.gguf")  # 迁移前的旧配置，文件已不在
+    assert config.resolve_model_path() == str(shared / "Qwen3-8B-Q5_K_M.gguf")
+    assert "不存在" in capsys.readouterr().err
+
+
+def test_missing_model_env_without_any_model_is_download_target(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "model_search_dirs", lambda: [str(tmp_path / "a"), str(tmp_path / "b")])
+    monkeypatch.setenv("RUSCHOLAR_MODEL_PATH", str(tmp_path / "custom.gguf"))
+    assert config.resolve_model_path() == str(tmp_path / "custom.gguf")
+
+
+def test_frontend_proxy_reads_same_env_port():
+    vite = open(os.path.join(config.PROJECT_ROOT, "frontend", "vite.config.ts"), encoding="utf-8").read()
+    assert "RUSCHOLAR_PORT" in vite and "loadEnv" in vite and "'8000'" in vite
