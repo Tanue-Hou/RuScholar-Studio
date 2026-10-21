@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { 
   Upload, 
   FileText, 
@@ -70,7 +71,7 @@ interface SentenceItem {
   } | null;
 }
 
-const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string; icon: any }> = {
+const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string; icon: LucideIcon }> = {
   SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学与工程技术)", color: "var(--accent-cyan)", icon: Cpu },
   AUTOMATION_CONTROL: { en: "Automation & Control Engineering", zh: "自动化与控制工程", color: "var(--accent-amber)", icon: Compass },
   AGRI_MED: { en: "Agricultural & Medical Sciences", zh: "农田与医药生命科学", color: "var(--accent-emerald)", icon: ShieldCheck },

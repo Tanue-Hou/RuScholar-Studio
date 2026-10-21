@@ -1,0 +1,3 @@
+# 无 GGUF / Metal / legacy 的 CI 环境
+-r requirements-core.txt
+-r requirements-test.txt

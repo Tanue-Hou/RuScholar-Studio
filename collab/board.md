@@ -10,7 +10,7 @@
 ## P1
 | 任务 | 内容 | 状态 | 负责 | 依赖 |
 | --- | --- | --- | --- | --- |
-| [RS-0004](tasks/RS-0004-ci-pipeline.md) | CI（pytest + 前端 lint/build） | 待办 | 建议 codex | RS-0001 |
+| [RS-0004](tasks/RS-0004-ci-pipeline.md) | CI（pytest + 前端 lint/build） | 本地验证通过，远端待运行 | codex@mac | RS-0001 |
 | [RS-0005](tasks/RS-0005-refactor-diagnostic-pipeline.md) | 诊断流水线去重 | 待办 | 建议 claude 设计 / codex 实现 | RS-0002 |
 | [RS-0006](tasks/RS-0006-ppl-performance.md) | PPL 计算向量化 | 待办 | 建议 codex | — |
 | [RS-0007](tasks/RS-0007-frontend-modularize.md) | 前端 App.tsx 拆分 | 待办 | 建议 antigravity | — |

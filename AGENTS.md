@@ -40,7 +40,8 @@ python backend/main.py           # 后端 + 已构建前端
 cd frontend && npm run dev       # 前端代理读取根 .env；缺省端口 8000
 python -m mcp_server.server      # MCP
 
-pytest -q                        # 不需要模型；test_llm_judge 需要 llama-cpp-python
+pytest -q                        # 默认排除真实模型；Mock 测试不依赖 llama-cpp
+python -B scripts/check_backend.py # CI 同一入口；排除真实模型，用 requirements-ci.txt 环境即可
 cd frontend && npm run lint && npm run build
 cd frontend && npm run test:config  # 实际 TS/Python 配置一致性；可设置 PYTHON_FOR_TESTS
 ```
@@ -56,6 +57,7 @@ cd frontend && npm run test:config  # 实际 TS/Python 配置一致性；可设�
 
 ## 资料（需要时再读）
 - [当前开发定型基线](docs/00-overview/development-baseline.md)
+- [CI 与测试入口](docs/05-testing/ci.md)
 - 项目总览与现状评估：`docs/00-overview/project-overview.md`
 - 架构、API、SSE 字段契约、MCP 工具：`docs/02-design/architecture.md`
 - 开发与测试指南：`docs/04-development/dev-guide.md`、`docs/05-testing/test-strategy.md`

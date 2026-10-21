@@ -1,0 +1,12 @@
+# Web/MCP 与规则引擎共享依赖；唯一维护来源，不含可选 GGUF/旧界面。
+spacy>=3.7,<4
+rich>=13.7,<16
+pydantic>=2.7,<3
+python-docx>=1.1,<2
+pypdf>=4.0,<7
+fastapi>=0.100,<1
+uvicorn>=0.23,<1
+python-multipart>=0.0.6,<1
+sse-starlette>=1.6.5,<4
+mcp>=1.0,<2
+pymorphy3>=2.0,<3
