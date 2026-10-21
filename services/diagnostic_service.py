@@ -13,7 +13,8 @@ from naturalization_layer.citation_integrity import check_citation_integrity
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_SKILL_RULES_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/rules/polishing_rules_v5.json")
-SKILL_RULES_PATH = os.getenv("RUSCHOLAR_RULES_PATH", PROJECT_SKILL_RULES_PATH)
+from services.config import rules_path as _rules_path
+SKILL_RULES_PATH = _rules_path()
 CALIBRATION_CONFIG_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/calibration/calibration_config.json")
 
 global_clusters = {}

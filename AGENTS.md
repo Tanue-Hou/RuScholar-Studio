@@ -34,20 +34,20 @@
 # 环境装在 OneDrive 之外
 VENV_DIR="$HOME/.venvs/ruscholar" ./setup.sh     # Apple Silicon：INSTALL_LLAMA_METAL=1
 python -m spacy download ru_core_news_sm          # 必需，缺了规则引擎会静默降级
-export RUSCHOLAR_MODEL_PATH="$(pwd)/../../data/models/Qwen3-8B-Q5_K_M.gguf"   # RS-0002 完成前
+# 模型自动从 ../../data/models/ 查找；配置写在项目根目录 .env（参考 .env.example）
 
 python backend/main.py           # 后端 + 已构建前端
-cd frontend && npm run dev       # 前端热更新（代理 /api → 6666）
+cd frontend && npm run dev       # 前端热更新（代理 /api → 8000）
 python -m mcp_server.server      # MCP
 
 pytest -q                        # 不需要模型；test_llm_judge 需要 llama-cpp-python
 cd frontend && npm run lint && npm run build
 ```
-已知坑：`mcp` 必须 `<2`；代码不读 `.env`；后端默认端口 8000 而前端代理 6666（均见 RS-0001/0002）。`setup.sh` 会在 `frontend/` 装 `node_modules`，做完前端工作可删除，避免同步。
+端口统一 8000；`.env` 会被自动读取（已存在的环境变量优先）。`setup.sh` 会在 `frontend/` 装 `node_modules`，做完前端工作可删除，避免同步。
 
 ## 数据与私有边界
 - 远端是**公开仓库**：`scratch/`、模型、论文原文、`.env` 永不提交。
-- 模型在 `../../data/models/`，草稿在 `../../data/private/ruscholar-scratch/`。
+- 模型在 `../../data/models/`（自动查找），草稿在 `../../data/private/ruscholar-scratch/`。
 
 ## Git
 - 仓库根：本目录；当前分支 `feature/style-diagnostics`（另有 `main`、`master`，收敛见 RS-0003）；远端 `Tanue-Hou/RuScholar-Studio`（公开）。

@@ -1109,7 +1109,7 @@ def thesis_check_model_installed() -> dict:
 @mcp.tool()
 async def thesis_download_model_tool() -> dict:
     """
-    Automatically download the Qwen GGUF model (approx. 2.7 GB) from ModelScope to enable offline diagnostics.
+    Automatically download the Qwen3-8B GGUF model (approx. 5.9 GB) from ModelScope to enable offline diagnostics.
     This tool saves the model to the local 'models/' directory.
     
     Returns:

@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 from naturalization_layer.llm_judge import StyleJudge
 Llama = pytest.importorskip("llama_cpp").Llama  # 可选依赖：未安装时跳过本文件
 
-MODEL_PATH = "models/Qwen3-4B-Q5_K_M.gguf"
+from services.shared_state import MODEL_PATH
 
 def test_style_judge_mock():
     mock_llm = MagicMock()

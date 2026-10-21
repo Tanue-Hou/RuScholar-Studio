@@ -30,8 +30,8 @@ python -m mcp_server.server               # MCP
 | 问题 | 临时规避 | 修复任务 |
 | --- | --- | --- |
 | ~~`pip install mcp` 会装 2.x~~ | 已在 requirements 中限定 `mcp<2` | RS-0001 ✔ |
-| `.env` 不会被自动读取 | 启动前 `set -a; source .env; set +a` | RS-0002 |
-| 后端默认 8000，vite 代理到 6666 | 开发模式下 `RUSCHOLAR_PORT=6666 python backend/main.py` | RS-0002 |
+| ~~`.env` 不会被自动读取~~ | 现在由 `services/config.py` 自动读取 | RS-0002 ✔ |
+| ~~后端 8000、前端代理 6666~~ | 统一为 8000 | RS-0002 ✔ |
 | ~~没装 llama-cpp 时测试收集失败~~ | 现在自动跳过 | RS-0001 ✔ |
 | `.venv` 是 macOS 生成的，不能跨机器使用 | 每台机器各自建 venv | — |
 

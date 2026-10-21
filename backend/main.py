@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 # Add parent dir to path to import naturalization_layer
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import services  # noqa: F401  先加载项目根目录的 .env（RS-0002）
 
 from naturalization_layer.rules_engine import analyze_text_rules, should_run_ppl_heuristic
 from naturalization_layer.ppl_engine import PPLEngine
@@ -29,7 +30,8 @@ citation_judge_global = None
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_SKILL_RULES_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/rules/polishing_rules_v5.json")
-SKILL_RULES_PATH = os.getenv("RUSCHOLAR_RULES_PATH", PROJECT_SKILL_RULES_PATH)
+from services.config import rules_path as _rules_path
+SKILL_RULES_PATH = _rules_path()
 CALIBRATION_CONFIG_PATH = os.path.join(PROJECT_ROOT, "naturalization_layer/calibration/calibration_config.json")
 global_clusters = {}
 calibration_db = {}
@@ -463,6 +465,7 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    host = os.getenv("RUSCHOLAR_HOST", "0.0.0.0")
-    port = int(os.getenv("RUSCHOLAR_PORT", "8000"))
+    from services.config import server_host, server_port
+    host = server_host()
+    port = server_port()
     uvicorn.run("main:app", host=host, port=port, reload=True)

@@ -6,7 +6,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from naturalization_layer.ppl_engine import PPLEngine
 from naturalization_layer.llm_judge import StyleJudge
 
-model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models/Qwen3-4B-Q5_K_M.gguf")
+from services.shared_state import MODEL_PATH as model_path
 engine = PPLEngine(model_path)
 judge = StyleJudge(engine.llm)
 
