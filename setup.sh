@@ -24,7 +24,7 @@ if [ "$(uname -s)" = "Darwin" ] && [ "${INSTALL_LLAMA_METAL:-0}" = "1" ]; then
   CMAKE_ARGS="-DGGML_METAL=on" FORCE_CMAKE=1 pip install --no-cache-dir --force-reinstall llama-cpp-python
 fi
 
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # 含 requirements.txt 与测试依赖
 python -m spacy download ru_core_news_sm
 
 if command -v npm >/dev/null 2>&1; then

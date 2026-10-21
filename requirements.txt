@@ -1,15 +1,19 @@
-llama-cpp-python>=0.2.75
-spacy>=3.7.0
-rich>=13.7.0
-pydantic>=2.7.0
-python-docx>=1.1.0
-pypdf>=4.0.0
-streamlit>=1.32.0
+# RuScholar Studio 运行依赖（RS-0001：全部加上版本上界，防止新环境装到不兼容的大版本）
+# 可选：本地 GGUF 模型推理。没有它会自动退回纯规则模式；Apple Silicon 用 install_mac.sh 编译 Metal 版。
+llama-cpp-python>=0.2.75,<0.4
+spacy>=3.7,<4
+rich>=13.7,<16
+pydantic>=2.7,<3
+python-docx>=1.1,<2
+pypdf>=4.0,<7
+# 只用于 legacy/streamlit_web_app.py（旧界面）
+streamlit>=1.32,<2
 
-fastapi>=0.100.0
-uvicorn>=0.23.0
-python-multipart>=0.0.6
-sse-starlette>=1.6.5
-mcp>=1.0.0
-pymorphy3>=2.1
-
+fastapi>=0.100,<1
+uvicorn>=0.23,<1
+python-multipart>=0.0.6,<1
+sse-starlette>=1.6.5,<4
+# mcp 2.x 把 FastMCP 改名为 MCPServer，本项目基于 1.x
+mcp>=1.0,<2
+# PyPI 上没有 2.1，最新为 2.0.x
+pymorphy3>=2.0,<3

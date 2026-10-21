@@ -15,7 +15,7 @@ if (-not (Test-Path $VenvDir)) {
 }
 
 & "$VenvDir\Scripts\python.exe" -m pip install --upgrade pip
-& "$VenvDir\Scripts\pip.exe" install -r requirements.txt
+& "$VenvDir\Scripts\pip.exe" install -r requirements-dev.txt
 & "$VenvDir\Scripts\python.exe" -m spacy download ru_core_news_sm
 
 if (Get-Command npm -ErrorAction SilentlyContinue) {
