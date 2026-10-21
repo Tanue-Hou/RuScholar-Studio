@@ -21,7 +21,7 @@
 | [RS-0008](tasks/RS-0008-mcp-server-split.md) | MCP 服务拆分 | 待办 | 建议 codex | RS-0005 |
 | [RS-0009](tasks/RS-0009-session-and-security.md) | 会话 TTL、CORS、上传限制 | 待办 | 建议 codex | RS-0002 |
 | [RS-0010](tasks/RS-0010-evaluation-benchmark.md) | 诊断质量评测集（只用公开与自写语料） | 待办（已批准方向） | 建议 claude | — |
-| [RS-0011](tasks/RS-0011-placeholder-apis.md) | 删除 4 个 501 占位接口 | 待办（已批准） | 建议 codex | — |
+| [RS-0011](tasks/RS-0011-placeholder-apis.md) | 删除 4 个 501 占位接口 | 实现及自测完成，待 Owner 验收 | codex@mac | — |
 
 已完成：RS-0000、RS-0012；RS-0001～0003 已按 Owner 本轮定型授权整合入 main。旧编号 TASK-00xx 与 RS-00xx 一一对应；旧看板在 `archive/`。
 

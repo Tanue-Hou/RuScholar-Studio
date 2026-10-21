@@ -65,8 +65,9 @@ flowchart TB
 | GET | `/api/diagnose` | SSE 诊断流 |
 | GET | `/api/check_model` | 本地模型是否存在 |
 | GET | `/api/download_model` | SSE 下载进度 |
-| POST | `/api/polish` `/api/references` `/api/format` `/api/structure` | 501 占位（RS-0011） |
 | GET | `/` | 托管 `frontend/dist` |
+
+RS-0011 已在任务分支移除四个未实现的占位路由；后续需 Web 改写/结构/格式能力时重新立项。改写建议可使用现有 MCP，参考文献注册继续走 `/api/upload_references`。
 
 ## 4. MCP 工具（17 个，统一返回 `{summary, findings, evidence, next_actions}`）
 

@@ -40,14 +40,14 @@
 | --- | --- | --- | --- |
 | F-C1 | ВАК 专业代码映射与越界提示 | ✅（仅 MCP） | `vak_specialty_mapper` |
 | F-C2 | 引言 ВАК 8 要素检查 + ГОСТ Р 7.0.100-2018 著录评分 | ✅（仅 MCP） | `thesis_audit_vak_gost_compliance`、`gost_validator` |
-| F-C3 | 结构分析、格式检查 | ⛔ | `/api/structure`、`/api/format` 返回 501 |
+| F-C3 | 结构分析、格式检查 | ⛔ 未实现 | RS-0011 移除占位路由；Web 能力后续另立 REQ |
 
 ### D. 输出与集成
 | ID | 需求 | 状态 | 实现位置 |
 | --- | --- | --- | --- |
 | F-D1 | Markdown / JSON 报告导出 | 🟡 仅 MCP，Web UI 未接入 | `report_service` |
 | F-D2 | MCP stdio 服务，17 个工具，工作流路由 | ✅ | `mcp_server` |
-| F-D3 | 改写建议接口 | 🟡 MCP 有，Web `/api/polish` 501 | `thesis_suggest_revision` |
+| F-D3 | 改写建议接口 | 🟡 仅 MCP，Web 未提供 | `thesis_suggest_revision`；RS-0011 移除 Web 占位路由 |
 | F-D4 | 本地模型状态检查与下载（进度条） | ✅ | `/api/check_model`、`/api/download_model` |
 
 ## 3. 非功能需求

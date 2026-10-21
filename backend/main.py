@@ -439,23 +439,6 @@ async def download_model_endpoint():
 
 from fastapi.staticfiles import StaticFiles
 
-# Future Extension Interfaces (Placeholder)
-@app.post("/api/polish")
-async def polish_text(text: str):
-    raise HTTPException(status_code=501, detail="Use /api/diagnose or the MCP suggest_revision tool for revision suggestions.")
-
-@app.post("/api/references")
-async def check_references(text: str):
-    raise HTTPException(status_code=501, detail="Use /api/upload_references or the MCP audit_citations tool for citation checks.")
-
-@app.post("/api/format")
-async def check_format(text: str):
-    raise HTTPException(status_code=501, detail="Document formatting checks are reserved for a future release.")
-
-@app.post("/api/structure")
-async def analyze_structure(text: str):
-    raise HTTPException(status_code=501, detail="Structure analysis is reserved for a future release.")
-
 # Serve frontend build statically
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 if os.path.exists(frontend_dist):
