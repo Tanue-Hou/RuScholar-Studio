@@ -1,6 +1,7 @@
 """RuScholar 统一配置（RS-0002）。
 
 - 在 services 包被导入时读取项目根目录的 `.env`（不需要额外依赖）；系统中已存在的环境变量优先。
+- 只读 `.env` 这一个文件（不读 `.env.local`、`.env.<mode>`）；前端 vite.config.ts 用同样的规则读取同一文件。
 - `.env` 中的相对路径一律按项目根目录解析，与启动时所在目录无关。
 """
 import os
@@ -85,8 +86,9 @@ def rules_path():
 
 
 def server_host():
-    return os.getenv("RUSCHOLAR_HOST", "0.0.0.0")
+    return os.getenv("RUSCHOLAR_HOST") or "0.0.0.0"
 
 
 def server_port():
-    return int(os.getenv("RUSCHOLAR_PORT", str(DEFAULT_PORT)))
+    """与前端 vite.config.ts 相同：空值或缺省时为 8000。"""
+    return int(os.getenv("RUSCHOLAR_PORT") or DEFAULT_PORT)

@@ -81,6 +81,21 @@ def test_missing_model_env_without_any_model_is_download_target(tmp_path, monkey
     assert config.resolve_model_path() == str(tmp_path / "custom.gguf")
 
 
-def test_frontend_proxy_reads_same_env_port():
+def test_frontend_proxy_reads_only_project_env():
     vite = open(os.path.join(config.PROJECT_ROOT, "frontend", "vite.config.ts"), encoding="utf-8").read()
-    assert "RUSCHOLAR_PORT" in vite and "loadEnv" in vite and "'8000'" in vite
+    assert "RUSCHOLAR_PORT" in vite and "'8000'" in vite
+    assert "'../.env'" in vite
+    assert "loadEnv" not in vite  # loadEnv 会额外读取 .env.local / .env.<mode>，与后端不一致
+
+
+def test_duplicate_keys_first_wins(tmp_path, monkeypatch):
+    env = tmp_path / ".env"
+    env.write_text("RS_DUP=first\nRS_DUP=second\n", encoding="utf-8")
+    monkeypatch.delenv("RS_DUP", raising=False)
+    config.load_env_file(str(env))
+    assert os.environ["RS_DUP"] == "first"
+
+
+def test_empty_port_falls_back_to_8000(monkeypatch):
+    monkeypatch.setenv("RUSCHOLAR_PORT", "")
+    assert config.server_port() == 8000

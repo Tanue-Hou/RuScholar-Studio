@@ -1,14 +1,41 @@
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-// 与后端读取同一份项目根目录 .env（RS-0002）：已设置的环境变量优先，未设置时默认 8000。
-const projectRoot = fileURLToPath(new URL('..', import.meta.url))
+// 端口来源与后端（services/config.py）完全一致（RS-0002）：
+// 只读项目根目录的 .env（不读 .env.local、.env.<mode>），已设置的环境变量优先，空值或缺省时为 8000。
+// 解析规则同 Python：忽略注释与空行，支持 export 前缀、成对引号、行尾 " #" 注释，重复的键以第一次出现为准。
+function readProjectEnv(file: string): Record<string, string> {
+  let text: string
+  try {
+    text = readFileSync(file, 'utf-8')
+  } catch {
+    return {}
+  }
+  const out: Record<string, string> = {}
+  for (const raw of text.split(/\r?\n/)) {
+    let line = raw.trim()
+    if (!line || line.startsWith('#') || !line.includes('=')) continue
+    if (line.startsWith('export ')) line = line.slice('export '.length).trim()
+    const i = line.indexOf('=')
+    const key = line.slice(0, i).trim()
+    let value = line.slice(i + 1).trim()
+    if (value.length >= 2 && value[0] === value[value.length - 1] && (value[0] === '"' || value[0] === "'")) {
+      value = value.slice(1, -1)
+    } else if (value.includes(' #')) {
+      value = value.split(' #')[0].trimEnd()
+    }
+    if (key && !(key in out)) out[key] = value
+  }
+  return out
+}
+
+const envFile = fileURLToPath(new URL('../.env', import.meta.url))
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
-  const fileEnv = loadEnv(mode, projectRoot, 'RUSCHOLAR_')
-  const port = process.env.RUSCHOLAR_PORT || fileEnv.RUSCHOLAR_PORT || '8000'
+export default defineConfig(() => {
+  const port = process.env.RUSCHOLAR_PORT || readProjectEnv(envFile).RUSCHOLAR_PORT || '8000'
   return {
     plugins: [react()],
     server: {
