@@ -35,10 +35,15 @@ def test_relative_paths_resolve_against_project_root():
     assert config.resolve_path("/abs/x.gguf") == "/abs/x.gguf"
 
 
-def test_model_env_relative_path(monkeypatch):
+def test_model_env_relative_path(tmp_path, monkeypatch):
+    project = tmp_path / "projects" / "ruscholar-studio"
+    project.mkdir(parents=True)
+    model = tmp_path / "data" / "models" / "m.gguf"
+    model.parent.mkdir(parents=True)
+    model.write_text("path fixture")
+    monkeypatch.setattr(config, "PROJECT_ROOT", str(project))
     monkeypatch.setenv("RUSCHOLAR_MODEL_PATH", "../../data/models/m.gguf")
-    expected = os.path.normpath(os.path.join(config.PROJECT_ROOT, "..", "..", "data", "models", "m.gguf"))
-    assert config.resolve_model_path() == expected
+    assert config.resolve_model_path() == str(model)
 
 
 def test_model_search_prefers_8b_then_4b(tmp_path, monkeypatch):

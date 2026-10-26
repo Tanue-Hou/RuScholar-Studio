@@ -5,6 +5,7 @@
 ## P0
 | 任务 | 内容 | 状态 | 负责 | 依赖 |
 | --- | --- | --- | --- | --- |
+| [RS-0015](tasks/RS-0015-migration-runtime.md) | 迁移后 Web/MCP/真实 Qwen 运行验证 | 执行完成，待验收 | codex@mac | 旧目录已删除；新目录删除后复查通过 |
 | [RS-0014](tasks/RS-0014-purge-thesis-drafts.md) | **论文引言草稿在 GitHub 公开**：演练已通过；需先暂设私有；强推后可申请 GitHub 清缓存（不保证受理），所有设备必须重新克隆；等 Owner 确认 | 需要 Owner 决策 | claude@mac | RS-0001～0003 合并后 |
 
 ## P1
