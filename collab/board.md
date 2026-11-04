@@ -14,7 +14,7 @@
 | [RS-0005](tasks/RS-0005-refactor-diagnostic-pipeline.md) | 诊断流水线去重 | 待办 | 建议 claude 设计 / codex 实现 | RS-0002 |
 | [RS-0006](tasks/RS-0006-ppl-performance.md) | PPL 计算向量化 | 待办 | 建议 codex | — |
 | [RS-0007](tasks/RS-0007-frontend-modularize.md) | 前端 App.tsx 拆分 | 待办 | 建议 antigravity | — |
-| [RS-0018](tasks/RS-0018-ui-refine.md) | 原界面去 AI 味、苹果式质感、问题分色、补充学科阈值/困惑度分布/词法汇总 | 待验收（[PR #2](https://github.com/Tanue-Hou/RuScholar-Studio/pull/2)） | claude@cloud | RS-0017 |
+| [RS-0018](tasks/RS-0018-ui-refine.md) | 原界面去 AI 味、苹果式质感、问题分色、补充学科阈值/困惑度分布/词法汇总 | 已合入 main（[PR #2](https://github.com/Tanue-Hou/RuScholar-Studio/pull/2)，8dfd259），待 Owner 验收 Mac 字体与真实 Qwen | claude@cloud | RS-0017 |
 
 ## P2
 | 任务 | 内容 | 状态 | 负责 | 依赖 |
@@ -27,4 +27,4 @@
 
 当前开发主干：`main`；定型代码已包含 `c7af83c`（RS-0011），配置与本机锁修复已由 Owner 验收。新工作从 main 建任务分支，不再重复提交这些修复评审。RS-0013 的完整平台验证与 RS-0014 的历史清理仍单列。
 
-2026-11-04 发布更新：RS-0016 后端整合及 RS-0017 原界面适配已通过 PR #1 合入 main（44525aa），远端前端/Python 3.10/3.12 三个 CI job 成功。当前以恢复后的深色玻璃双栏界面为准；旧迁移与历史基线记录保留用于追溯。
+2026-11-04 发布更新：RS-0018 界面精修（问题分色、苹果式质感与系统字体、信息补全）已通过 PR #2 合入 main（8dfd259），远端 CI 三项成功。RS-0016 后端整合及 RS-0017 原界面适配已通过 PR #1 合入 main（44525aa），远端前端/Python 3.10/3.12 三个 CI job 成功。当前以恢复后的深色玻璃双栏界面为准；旧迁移与历史基线记录保留用于追溯。

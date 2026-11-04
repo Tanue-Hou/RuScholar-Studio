@@ -2,7 +2,7 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待验收（PR #2 待合入 main） |
+| 状态 | 已合入 main（PR #2，合并提交 8dfd259）；Mac 字体与真实 Qwen 复核待 Owner 验收 |
 | 优先级 | P1 |
 | 负责人 | claude@cloud |
 | 评审人 | Owner |
@@ -21,8 +21,12 @@
 - [x] 原有交互全部保留；lint、API 6/6、配置 8/8、构建通过；后端 112 passed / 1 deselected
 - [x] 深色/浅色/概览/完整右栏/手机端渲染参考图（示例数据），无控制台错误、无横向溢出
 - [x] 六类问题颜色经验证脚本检查（相邻对深浅色均通过），颜色均配文字标签
+- [x] 推送并经 PR #2 合入 main，远端 CI 三项通过
 - [ ] Owner 在 Mac 上确认苹果字体效果与视觉方向
 - [ ] 真实 Qwen 本机浏览器流程复核
 
 ## 记录
 [评审与参考图](../reviews/2026-11-04-RS-0018-ui-refine.md) · [PR #2](https://github.com/Tanue-Hou/RuScholar-Studio/pull/2)
+
+## 发布记录
+[PR #2](https://github.com/Tanue-Hou/RuScholar-Studio/pull/2) 经 Owner 批准合入 main，合并提交 8dfd259（普通合并，未改写历史）。合并前 head 6cb3226 的[远端 CI](https://github.com/Tanue-Hou/RuScholar-Studio/actions/runs/41850076296) 中 Backend Python 3.10、Backend Python 3.12、Frontend quality 三项均成功，PR 无冲突、无评审意见。
