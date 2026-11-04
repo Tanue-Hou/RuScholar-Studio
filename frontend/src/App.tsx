@@ -464,24 +464,24 @@ function App() {
                   </div>
                 )}
                 <div className="kpi-grid">
-                  <div className="kpi">
+                  <div className="kpi tint-red">
                     <div className="kpi-label">需修改</div>
-                    <div className={`kpi-value ${flaggedPct >= 30 ? 'tone-critical' : ''}`}>{flaggedPct}<span className="kpi-unit">%</span></div>
+                    <div className="kpi-value">{flaggedPct}<span className="kpi-unit">%</span></div>
                     <div className="kpi-sub num">{diagnosis.summary.flagged} / {progress.total} 句</div>
                   </div>
-                  <div className="kpi">
+                  <div className="kpi tint-blue">
                     <div className="kpi-label">平均困惑度</div>
                     <div className="kpi-value">{fmt(ppl.mean)}</div>
                     <div className="kpi-sub num">中位 {fmt(ppl.median)} · 范围 {fmt(ppl.min, 0)}–{fmt(ppl.max, 0)}</div>
                   </div>
-                  <div className="kpi">
+                  <div className="kpi tint-orange">
                     <div className="kpi-label">低于下限</div>
-                    <div className={`kpi-value ${ppl.belowLow ? 'tone-critical' : ''}`}>{ppl.count ? ppl.belowLow : '—'}</div>
+                    <div className="kpi-value">{ppl.count ? ppl.belowLow : '—'}</div>
                     <div className="kpi-sub num">PPL &lt; {calib.ppl_low} · 高于上限 {ppl.count ? ppl.aboveHigh : '—'}</div>
                   </div>
-                  <div className="kpi">
+                  <div className="kpi tint-teal">
                     <div className="kpi-label">引文问题</div>
-                    <div className={`kpi-value ${integrityWarnings.length ? 'tone-warning' : ''}`}>
+                    <div className="kpi-value">
                       {integrityWarnings.length + completed.filter(d => d.status === 'flagged' && (d.issue_type === 'citation_gap' || d.issue_type === 'citation_contradiction')).length}
                     </div>
                     <div className="kpi-sub num">书目缺失 {integrityWarnings.length} · 逐句 {completed.filter(d => d.citation_audit?.length).length} 处核验</div>
@@ -507,7 +507,7 @@ function App() {
                       <li key={r.key} className="risk-row">
                         <div className="risk-name">{r.label}<span className="risk-hint">{r.hint}</span></div>
                         <div className={`risk-value num ${level === '高' ? 'tone-critical' : ''}`}>{v}%<span className="risk-level">{level}</span></div>
-                        <div className="telemetry-track"><div className={`telemetry-fill ${level === '高' ? 'high' : level === '中' ? 'mid' : ''}`} style={{ transform: `scaleX(${v / 100})` }} /></div>
+                        <div className="telemetry-track"><div className={`telemetry-fill ${level === '高' ? 'high' : level === '中' ? 'mid' : 'low'}`} style={{ transform: `scaleX(${v / 100})` }} /></div>
                       </li>
                     );
                   })}
@@ -641,11 +641,11 @@ function App() {
               const sentenceIntegrityCount = sortedDiagnostics.filter(d => d.status === 'flagged' && (d.issue_type === 'citation_gap' || d.issue_type === 'citation_contradiction')).length;
               const integrityCount = integrityWarnings.length + sentenceIntegrityCount;
               const tabs = [
-                ['all', '全部', sortedDiagnostics.length + integrityWarnings.length],
-                ['ai', 'AI 特征', aiCount],
-                ['flagged', '文风', styleCount],
-                ['integrity', '引文', integrityCount],
-                ['passed', '通过', passedCount],
+                ['all', '全部', sortedDiagnostics.length + integrityWarnings.length, null],
+                ['ai', 'AI 特征', aiCount, 'issue-ai'],
+                ['flagged', '文风', styleCount, 'issue-trans'],
+                ['integrity', '引文', integrityCount, 'issue-gap'],
+                ['passed', '通过', passedCount, 'passed'],
               ] as const;
 
               return (
@@ -653,8 +653,9 @@ function App() {
                   {file && progress.total > 0 && (
                     <div className="tabs-row">
                       <div className="tabs-container" role="group" aria-label="筛选诊断结果">
-                        {tabs.map(([key, label, count]) => (
+                        {tabs.map(([key, label, count, dot]) => (
                           <button key={key} className={`tab-btn ${activeTab === key ? 'active' : ''}`} aria-pressed={activeTab === key} onClick={() => setActiveTab(key)}>
+                            {dot && <i className={`swatch ${dot}`} aria-hidden />}
                             {label}<span className="tab-count num">{count}</span>
                           </button>
                         ))}
