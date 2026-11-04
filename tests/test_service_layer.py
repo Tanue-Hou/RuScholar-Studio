@@ -227,3 +227,22 @@ def test_cloud_mode_never_touches_local_model():
     assert engine.calls == []
     assert judge.diagnose_sentence.call_args.kwargs["engine_type"] == "deepseek-v4-pro"
     assert res["status"] == "flagged" and res["ppl"] is None
+
+
+def test_init_event_carries_discipline_calibration():
+    from services.diagnostic_service import run_sentence_diagnose_stream
+    from services.rules_config import get_calibration
+
+    async def first_event():
+        gen = run_sentence_diagnose_stream("Студенты читают книгу.", "calib-test", "cloud-pro", "", "",
+                                           "AUTOMATION_CONTROL", None, MagicMock(), None)
+        ev = await gen.__anext__()
+        await gen.aclose()
+        return ev
+
+    ev = asyncio.run(first_event())
+    data = json.loads(ev["data"])
+    calib = get_calibration("AUTOMATION_CONTROL")
+    assert ev["event"] == "init"
+    assert data["calibration"]["ppl_low"] == calib.get("ppl_low", 15.0)
+    assert data["calibration"]["nv_ratio_max"] == calib.get("nv_ratio_max", 4.5)

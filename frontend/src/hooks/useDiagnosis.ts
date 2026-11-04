@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import {
   createSession, detectDiscipline, openDiagnosisStream, uploadReferences,
 } from '../api/client';
-import type { DiagnosticResult, EngineSettings, InitEvent, RiskScores } from '../types';
+import type { Calibration, DiagnosticResult, EngineSettings, InitEvent, RiskScores } from '../types';
 
 export type Phase = 'idle' | 'preparing' | 'running' | 'done' | 'stopped' | 'error';
 export type ReferencesState = 'none' | 'uploading' | 'indexed' | 'metadata' | 'failed';
@@ -19,6 +19,8 @@ interface State {
   error: string | null;
   discipline: string;
   nlpBackend: 'spacy' | 'fallback';
+  /** Discipline thresholds from the init event; null until the stream starts. */
+  calibration: Calibration | null;
   references: ReferencesState;
   /** One slot per sentence; null until its result arrives. */
   results: (DiagnosticResult | null)[];
@@ -34,6 +36,7 @@ const initialState: State = {
   error: null,
   discipline: 'UNIVERSAL',
   nlpBackend: 'spacy',
+  calibration: null,
   references: 'none',
   results: [],
   warnings: [],
@@ -76,6 +79,7 @@ function reducer(state: State, action: Action): State {
         ...state,
         phase: 'running',
         nlpBackend: action.data.nlp_backend === 'fallback' ? 'fallback' : 'spacy',
+        calibration: action.data.calibration ?? null,
         results: Array(action.data.total_sentences).fill(null),
       };
     case 'result': {
