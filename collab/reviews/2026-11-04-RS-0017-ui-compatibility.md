@@ -29,6 +29,6 @@ Owner 已批准恢复原前端、适配新后端并推送或合入主干。视�
 
 ## 发布及范围
 
-本地工作位于 agent/codex/RS-0017-restore-ui；依 Owner 授权发布到 Tanue-Hou/RuScholar-Studio 的 main，发布结果以远端提交与交接记录为准。不重写历史、不上传模型、密钥或私人论文。
+已通过 [PR #1](https://github.com/Tanue-Hou/RuScholar-Studio/pull/1) 发布至 main，合并提交 44525aa，本地主干已同步。[CI #2](https://github.com/Tanue-Hou/RuScholar-Studio/actions/runs/41823277142) 的前端、Python 3.10、Python 3.12 三项均成功。不重写历史、不上传模型、密钥或私人论文。
 
 Windows、真实云端和长文准确率评测仍单列；RS-0016 记录的开发依赖 minimatch moderate 告警本轮未变更。

@@ -2,7 +2,7 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 本地实现与验证完成；远端待首次运行 |
+| 状态 | 已完成，远端 PR 检查通过 |
 | 优先级 | P1 |
 | 负责人 | codex@mac |
 | 验收人 | Owner（本轮不反复转交助手评审） |
@@ -16,7 +16,7 @@
 - [x] 加 ruff（lint + format 检查），先只报告不阻断
 
 ## 验收标准
-- [ ] PR 上自动出现两个绿色检查
+- [x] PR 上自动出现前端与后端矩阵绿色检查
 
 ## 验证记录
 
@@ -30,3 +30,6 @@
 - 远端 GitHub/Ubuntu 检查须获准推送后验证，本轮没有推送，不能将本地通过冒充 PR 绿灯。
 
 - 前端更新后的锁文件 npm ci 成功且 audit=0；严格 lint、配置行为 8/8、TypeScript/Vite build 均通过。本机 Node 26，工作流 Node 22 实际远端运行仍待验证。
+
+## 远端验证（2026-11-04，随 RS-0017 发布）
+Owner 授权推送/合入后，[PR #1](https://github.com/Tanue-Hou/RuScholar-Studio/pull/1) 的 [RuScholar CI #2](https://github.com/Tanue-Hou/RuScholar-Studio/actions/runs/41823277142) 已完成：Frontend quality、Backend Python 3.10、Backend Python 3.12 全部 success，包括依赖安装、模型注册、pip check、自动测试与前端检查/构建。原本地记录中的零告警仅代表当时锁文件；当前 minimatch moderate 开发依赖告警仍见 RS-0017 审查记录。

@@ -31,3 +31,7 @@
 ## RS-0011 已验收更新（2026-10-21）
 - Owner 验收后，main 已合入 c7af83c：移除四个 501 路由，保留既有 API。累计 pytest 73 passed / 1 skipped。
 - 后续推进 RS-0004 的 CI 与自动化测试；远端执行结果在推送并运行前不能写成通过。
+
+## 当前发布更新（2026-11-04）
+
+Owner 批准恢复原 UI、对接新后端并发布。RS-0016 服务层/MCP/PPL 与运行修正、RS-0017 深色玻璃双栏前端已由 [PR #1](https://github.com/Tanue-Hou/RuScholar-Studio/pull/1) 合入 main（44525aa）。当前 UI 沿用 bd599dc 的视觉，集中 API 和诊断 hooks 管理生命周期；模型下载为 POST。远端前端/Python 3.10/Python 3.12 检查成功，本机真实 Qwen 与 Web 流程通过。后续从 main 建新任务分支；历史未推送和旧 UI 描述仅适用于原日期。Windows、真实云端与准确率评测仍单列。

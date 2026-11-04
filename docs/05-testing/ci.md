@@ -41,3 +41,7 @@ CI 虚拟环境安装 `pip install -r requirements-ci.txt`，再执行 `pip inst
 ## RS-0016 本地复核（2026-11-04）
 
 Python 3.13.12：111 passed / 1 deselected，pip check 通过。前端 lint、配置 8/8、API 4/4 与构建通过；源码和安装包 MCP 均列出 17 工具并实际调用。此次未重新运行 Python 3.10/3.12 的干净环境矩阵，GitHub CI 仍未运行。旧版依赖零告警记录只代表当时锁文件；本次 npm 官方 bulk audit 仍报告 1 项 moderate（开发依赖 minimatch），未作强制跨主版本替换。详细证据与限制见 [本地审查记录](../../collab/reviews/2026-11-04-RS-0016-local-review.md)。
+
+## 远端已验证（2026-11-04，RS-0017）
+
+Owner 授权发布后，[PR #1](https://github.com/Tanue-Hou/RuScholar-Studio/pull/1) 的 [CI #2](https://github.com/Tanue-Hou/RuScholar-Studio/actions/runs/41823277142) 已通过：Frontend quality、Backend Python 3.10、Backend Python 3.12 全部 success；包含干净依赖安装、MCP 注册、spaCy 安装、pip check、自动测试及前端 lint/config/API/build。此前“远端未运行”描述保留为历史时间点，不代表当前状态。Windows、GGUF 实机和诊断准确率仍是独立验证。

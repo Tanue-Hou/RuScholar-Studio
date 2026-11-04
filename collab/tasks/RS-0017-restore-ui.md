@@ -2,7 +2,7 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 本地验证通过，准备发布 |
+| 状态 | 已完成，已合入 main |
 | 负责人 | codex@mac |
 | Owner 批准 | 2026-11-04：推送或合入主干，UI 恢复之前版本并匹配新后端 |
 | 分支 | agent/codex/RS-0017-restore-ui |
@@ -14,7 +14,10 @@
 - [x] 原双栏界面、顶部引擎栏、风险面板、逐句详情与主题切换恢复
 - [x] 上传、分类、单次会话、文献注册、SSE、停止/重启及 POST 模型下载适配新后端
 - [x] 自动检查与真实本地浏览器流程通过，记录截图
-- [ ] 本地 main 合入、推送远端，并记录远端 CI 的实际状态
+- [x] 本地 main 合入、推送远端，并记录远端 CI 的实际状态
 
 ## 验证记录
 111 passed / 1 deselected；前端 lint、配置 8/8、API 6/6、构建通过；真实 Qwen 浏览器样例 PPL 40.75 / 17.89。详见 [适配记录](../reviews/2026-11-04-RS-0017-ui-compatibility.md)。
+
+## 发布记录
+[PR #1](https://github.com/Tanue-Hou/RuScholar-Studio/pull/1) 已合入 main，合并提交 44525aa。本地主干已同步；[远端 CI](https://github.com/Tanue-Hou/RuScholar-Studio/actions/runs/41823277142) 的前端、Python 3.10、Python 3.12 三个 job 均成功。
