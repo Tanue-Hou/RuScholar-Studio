@@ -7,7 +7,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:6666',
+        // Must match the backend port (backend/main.py defaults to 8000).
+        target: `http://127.0.0.1:${process.env.RUSCHOLAR_PORT ?? '8000'}`,
         changeOrigin: true,
       },
     },

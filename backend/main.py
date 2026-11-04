@@ -70,11 +70,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# The built frontend is served from this same origin, so CORS is only needed
+# for the Vite dev server. Extra origins: comma-separated RUSCHOLAR_CORS_ORIGINS.
+_default_cors = "http://localhost:5173,http://127.0.0.1:5173"
+cors_origins = [o.strip() for o in os.getenv("RUSCHOLAR_CORS_ORIGINS", _default_cors).split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -396,7 +400,7 @@ async def diagnose_stream(session_id: str):
 async def check_model():
     return {"exists": os.path.exists(MODEL_PATH)}
 
-@app.get("/api/download_model")
+@app.post("/api/download_model")
 async def download_model_endpoint():
     async def event_generator():
         try:
@@ -463,6 +467,8 @@ else:
 
 if __name__ == "__main__":
     import uvicorn
-    host = os.getenv("RUSCHOLAR_HOST", "0.0.0.0")
+    # Loopback by default: manuscripts are private. Set RUSCHOLAR_HOST=0.0.0.0
+    # explicitly to expose the (unauthenticated) API on the network.
+    host = os.getenv("RUSCHOLAR_HOST", "127.0.0.1")
     port = int(os.getenv("RUSCHOLAR_PORT", "8000"))
     uvicorn.run("main:app", host=host, port=port, reload=True)

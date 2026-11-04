@@ -205,7 +205,7 @@ cp .env.example .env
 | `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/...` | 自动下载本地大模型时所用的 ModelScope 节点 URL。 |
 | `RUSCHOLAR_RULES_PATH` | `naturalization_layer/rules/polishing_rules_v5.json` | 学科写作规范及学术模板数据库路径。 |
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | 物理 PPL 探针推理时的 GPU 卸载层数（-1 表示最大，0 表示纯 CPU）。 |
-| `RUSCHOLAR_HOST` | `0.0.0.0` | 后端服务器绑定的 host。 |
+| `RUSCHOLAR_HOST` | `127.0.0.1` | 后端服务器绑定的 host。默认仅本机可访问；API 无鉴权，设为 `0.0.0.0` 前请确认网络环境可信。 |
 | `RUSCHOLAR_PORT` | `8000` | 后端服务器绑定的 port。 |
 
 ---
@@ -425,7 +425,7 @@ cp .env.example .env
 | `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/...` | Ссылка для автоматической загрузки модели. |
 | `RUSCHOLAR_RULES_PATH` | `naturalization_layer/rules/polishing_rules_v5.json` | Путь к правилам письма Thesis Butler. |
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | Слои модели на GPU (-1 для максимума, 0 для CPU). |
-| `RUSCHOLAR_HOST` | `0.0.0.0` | Хост для запуска backend API. |
+| `RUSCHOLAR_HOST` | `127.0.0.1` | Хост для запуска backend API. По умолчанию доступен только локально; API без аутентификации — используйте `0.0.0.0` только в доверенной сети. |
 | `RUSCHOLAR_PORT` | `8000` | Порт для запуска backend API. |
 
 ---
@@ -648,7 +648,7 @@ cp .env.example .env
 | `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/Qwen/Qwen3-4B-GGUF/...` | URL to download the model from. |
 | `RUSCHOLAR_RULES_PATH` | `naturalization_layer/rules/polishing_rules_v5.json` | Path to the custom skill JSON rules. |
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | Number of model layers offloaded to GPU (-1 for max, 0 for CPU). |
-| `RUSCHOLAR_HOST` | `0.0.0.0` | Binding host for backend API. |
+| `RUSCHOLAR_HOST` | `127.0.0.1` | Binding host for backend API. Loopback-only by default; the API has no authentication, so only use `0.0.0.0` on a trusted network. |
 | `RUSCHOLAR_PORT` | `8000` | Binding port for backend API. |
 
 ---

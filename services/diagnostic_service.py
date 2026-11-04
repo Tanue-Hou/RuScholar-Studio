@@ -89,7 +89,11 @@ async def run_sentence_diagnose_stream(
     # Yield init event matching frontend expectations
     yield {
         "event": "init",
-        "data": json.dumps({"total_sentences": len(sentences), "discipline": discipline})
+        "data": json.dumps({
+            "total_sentences": len(sentences),
+            "discipline": discipline,
+            "nlp_backend": rules_res.get("nlp_backend", "spacy")
+        })
     }
 
     # Yield citation integrity warnings first as global diagnostics (with index = -1, -2...)

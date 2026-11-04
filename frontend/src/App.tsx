@@ -112,6 +112,7 @@ function App() {
   const [stats, setStats] = useState({ flaggedCount: 0, totalPPL: 0, pplCount: 0 });
   
   const [discipline, setDiscipline] = useState<string>('UNIVERSAL');
+  const [nlpBackend, setNlpBackend] = useState<'spacy' | 'fallback'>('spacy');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'ai' | 'flagged' | 'integrity'>('all');
 
@@ -152,28 +153,46 @@ function App() {
     setTimeout(() => setCopiedKey(null), 1800);
   };
 
-  const downloadLocalModel = () => {
+  // The download endpoint is POST-only (a GET with side effects could be
+  // triggered cross-site), so read the SSE stream via fetch instead of EventSource.
+  const downloadLocalModel = async () => {
     setLocalModelStatus('downloading');
     setDownloadProgress(0);
-    const source = new EventSource('/api/download_model');
-    source.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      if (data.status === 'downloading') {
-        setDownloadProgress(data.progress);
-      } else if (data.status === 'complete') {
-        source.close();
-        setLocalModelStatus('exists');
-      } else if (data.status === 'error') {
-        source.close();
-        setLocalModelStatus('missing');
-        alert('Download failed: ' + data.message);
+    try {
+      const res = await fetch('/api/download_model', { method: 'POST' });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split(/\r?\n\r?\n/);
+        buffer = frames.pop() ?? '';
+        for (const frame of frames) {
+          const dataLine = frame.split(/\r?\n/).find(l => l.startsWith('data:'));
+          if (!dataLine) continue;
+          const data = JSON.parse(dataLine.slice(5).trim());
+          if (data.status === 'downloading') {
+            setDownloadProgress(data.progress);
+          } else if (data.status === 'complete') {
+            setLocalModelStatus('exists');
+            return;
+          } else if (data.status === 'error') {
+            setLocalModelStatus('missing');
+            alert('Download failed: ' + data.message);
+            return;
+          }
+        }
       }
-    };
-    source.onerror = () => {
-      source.close();
+      setLocalModelStatus('missing');
+      alert('Download stream ended unexpectedly.');
+    } catch (err) {
+      console.error('Model download failed', err);
       setLocalModelStatus('missing');
       alert('Connection error during download.');
-    };
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -303,6 +322,7 @@ function App() {
     eventSource.addEventListener("init", (e) => {
       const data = JSON.parse(e.data);
       setProgress({ current: 0, total: data.total_sentences });
+      setNlpBackend(data.nlp_backend === 'fallback' ? 'fallback' : 'spacy');
       setSentences(Array(data.total_sentences).fill({ text: '', status: 'analyzing' }));
     });
     
@@ -934,6 +954,13 @@ function App() {
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                   {DISCIPLINE_MAP[discipline]?.en || 'Universal Academic Domain'}
                 </div>
+              </div>
+            )}
+
+            {progress.total > 0 && nlpBackend === 'fallback' && (
+              <div role="status" className="glass-card" style={{ marginBottom: '12px', fontSize: '12px', lineHeight: 1.5, color: 'var(--accent-rose)' }}>
+                后端未安装 spaCy 俄语模型 ru_core_news_sm，名动比、被动语态、第二格链等形态学指标为粗略估算，结果仅供参考。
+                请在后端执行 <code>python -m spacy download ru_core_news_sm</code> 后重新质检。
               </div>
             )}
 
