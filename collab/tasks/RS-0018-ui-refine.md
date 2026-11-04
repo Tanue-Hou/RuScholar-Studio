@@ -2,7 +2,7 @@
 
 | 字段 | 值 |
 | --- | --- |
-| 状态 | 待验收 |
+| 状态 | 待验收（PR #2 待合入 main） |
 | 优先级 | P1 |
 | 负责人 | claude@cloud |
 | 评审人 | Owner |
@@ -25,4 +25,4 @@
 - [ ] 真实 Qwen 本机浏览器流程复核
 
 ## 记录
-[评审与参考图](../reviews/2026-11-04-RS-0018-ui-refine.md)
+[评审与参考图](../reviews/2026-11-04-RS-0018-ui-refine.md) · [PR #2](https://github.com/Tanue-Hou/RuScholar-Studio/pull/2)
