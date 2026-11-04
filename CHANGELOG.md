@@ -6,25 +6,55 @@ up the work without re-reading the whole diff.
 
 ---
 
-## 2026-11-04 — RS-0018: refine the restored cockpit UI (less "AI look", more information)
+## 2026-11-04 — RS-0018：原界面精修（去 AI 味、苹果式质感、问题分色、信息补全）
 
-Base: `main` b69bd85 (RS-0017 restored UI). Layout and every interaction are unchanged.
-- **Visual:** removed neon cyan glow, gradients, glass blur, the Sparkles logo, emoji, and
-  bilingual "(English)" labels everywhere. Neutral graphite/paper surfaces; colour only for
-  status, always with a text label. Fonts are bundled (Inter, Source Serif 4,
-  JetBrains Mono) instead of loaded from Google Fonts.
-- **New information:**
-  - document statistics;
-  - discipline thresholds;
-  - a four-cell overview;
-  - a per-sentence perplexity chart (hover tooltip, click to select);
-  - an issue breakdown and lexical totals;
-  - a metrics-versus-threshold table for the selected sentence.
-- **Backend:** the SSE `init` event now carries `calibration`
-  (`ppl_low`, `ppl_high`, `nv_ratio_max`, `passive_max`). The field is additive and covered
-  by a test.
-- **Cleanup:** deleted the unused components from the rejected phase-3 redesign.
-- **Details and reference renders:** `collab/reviews/2026-11-04-RS-0018-ui-refine.md`.
+基线：`main` b69bd85（RS-0017 恢复的双栏驾驶舱）。布局和所有交互保持不变。
+
+### 视觉
+- **去掉 AI 味：** 删除青色霓虹发光、渐变进度条、玻璃模糊、Sparkles 图标、emoji、到处都有的「(English)」括注，以及「深度神经网络质检计算中」这类夸张文案。
+- **苹果式质感：**
+  - 画布为纯黑（深色）/ `#f5f5f7`（浅色），卡片为 18px 大圆角；
+  - 系统字体（macOS / iOS 上为 SF Pro 与苹方），标题半粗、字距收紧，关键数字用大号；
+  - 主按钮为胶囊形蓝色，筛选用分段控件，顶栏半透明；
+  - 手稿正文用衬线体（Safari 中为 New York）。
+- **字体本地化：** 不再请求 Google Fonts。Inter、Source Serif 4、JetBrains Mono 打包进构建，作为非苹果设备上的回退字体。
+
+### 问题分色（新增）
+| 问题 | 颜色 | 手稿下划线 |
+| --- | --- | --- |
+| 翻译腔与学术套话 | 蓝 | 实线 |
+| AI 生成特征 | 橙 | 粗实线 |
+| 引用支撑不足 | 青绿 | 虚线 |
+| 句式臃肿 | 黄 | 点线 |
+| 与文献表述高度重合 | 品红 | 双线 |
+| 与所引文献冲突 | 紫 | 虚线 |
+
+- **用在哪里：** 手稿下划线、图例（含句数）、困惑度分布图、问题构成条形图、诊断卡片侧条，以及逐句详情的标签。
+- **配色依据：** 颜色取自经验证的分类色板，按固定顺序分配。深色、浅色两种主题下，相邻颜色的区分度检查都通过。
+- **不只靠颜色：** 每处颜色旁都写着问题名称，手稿里还用线型区分，色盲用户也能分辨。
+- **「通过」用中性灰：** 避免和青绿色的「引用支撑不足」混淆。
+- **单一定义来源：** `frontend/src/lib/issues.ts`。
+
+### 新增信息
+- 文档统计：字符、词、句子数，文内引用数，文献核验方式。
+- 学科阈值：困惑度区间、名动比上限、被动语态上限。
+- 概览四格：需修改占比；平均、中位与范围困惑度；低于下限句数；引文问题数。
+- 逐句困惑度分布图：悬停查看数值，点击定位到句子。
+- 问题构成与词法汇总。
+- 选中句子的「本句数值 vs 本学科阈值」对照表；引用核验显示作者、年份和依据来源。
+
+### 后端
+- SSE `init` 事件新增 `calibration`（`ppl_low`、`ppl_high`、`nv_ratio_max`、`passive_max`）。字段只增不改，取自 `calibration_config.json`，与流水线实际判定用的阈值一致。
+- `docs/02-design/architecture.md` 已同步，新增测试 `test_init_event_carries_discipline_calibration`。
+
+### 清理
+删除上一轮被否决的设计留下、已无引用的 `components/*` 和 `lib/labels.ts`。
+
+### 验证
+- 后端 112 passed / 1 deselected；前端 lint、test:api 6/6、test:config 8/8、构建通过。
+- Playwright 渲染深色、浅色、概览、完整右栏和手机端参考图：无控制台错误，无横向溢出。
+- 参考图与评审记录见 `collab/reviews/2026-11-04-RS-0018-ui-refine.md`。
+- **未验证：** 真实 Qwen 推理下的完整流程、真实云端、Windows。
 
 ---
 

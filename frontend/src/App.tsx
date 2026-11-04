@@ -15,6 +15,7 @@ import {
 import './index.css';
 import { uploadDocument } from './api/client';
 import { PplStrip } from './components/PplStrip';
+import { ISSUE_ORDER, issueMeta, issueTitle } from './lib/issues';
 import { useDiagnosis } from './hooks/useDiagnosis';
 import { useModelStatus } from './hooks/useModelStatus';
 import { useTheme } from './hooks/useTheme';
@@ -26,6 +27,7 @@ import type { CitationAudit, DiagnosticResult, EngineType, SentenceMetrics } fro
 interface SentenceItem {
   text: string;
   status: string;
+  issue_type?: string | null;
   ppl?: number | null;
   metrics?: SentenceMetrics | null;
 }
@@ -39,22 +41,8 @@ const DISCIPLINE_MAP: Record<string, { zh: string; ru: string }> = {
   UNIVERSAL: { zh: '通用学术 · 跨学科', ru: 'Междисциплинарная область' },
 };
 
-const ISSUE_TITLES: Record<string, string> = {
-  ai_generated_suspicion: 'AI 生成特征',
-  machine_translation_cliche: '翻译腔与学术套话',
-  citation_gap: '引用支撑不足',
-  citation_contradiction: '与所引文献冲突',
-  semantic_plagiarism_risk: '与文献表述高度重合',
-  style_heavy: '句式臃肿',
-  json_parse_error: '模型输出无法解析',
-  api_request_error: '云端接口未响应',
-};
-const issueTitle = (t: string | null) => ISSUE_TITLES[t ?? ''] ?? '文风提示';
-
-/** Issue families carry a tone so the eye can sort them; colour is never the only cue. */
-const issueTone = (t: string | null): 'critical' | 'warning' | 'muted' =>
-  t === 'ai_generated_suspicion' || t === 'citation_contradiction' ? 'critical'
-    : t === 'json_parse_error' || t === 'api_request_error' ? 'muted' : 'warning';
+/** Status tone for non-issue states (passed / infrastructure errors). */
+const isInfraIssue = (t: string | null) => t === 'json_parse_error' || t === 'api_request_error';
 
 const ENGINE_LABELS: Record<EngineType, string> = {
   local: '本地 · Qwen3-8B GGUF',
@@ -396,11 +384,18 @@ function App() {
               </div>
 
               {progress.current > 0 && (
-                <div className="doc-legend" aria-hidden>
-                  <span><i className="legend-line flagged" />需修改</span>
-                  <span><i className="legend-line" />通过</span>
-                  <span><span className="legend-num is-low">7.4</span>困惑度标注，着色表示低于下限 {calib.ppl_low}</span>
-                  <span className="doc-legend-note">点击句子查看指标与改写建议</span>
+                <div className="doc-legend">
+                  {ISSUE_ORDER.filter(t => breakdown.some(b => b.type === t)).map(t => {
+                    const m = issueMeta(t);
+                    return (
+                      <span key={t} title={`下划线：${m.lineLabel}`}>
+                        <i className={`legend-line issue-${m.key} line-${m.line}`} aria-hidden />{m.title}
+                        <span className="num legend-count">{breakdown.find(b => b.type === t)?.count}</span>
+                      </span>
+                    );
+                  })}
+                  <span><span className="legend-num is-low">7.4</span>困惑度，着色为低于下限 {calib.ppl_low}</span>
+                  <span className="doc-legend-note">点击句子查看详情</span>
                 </div>
               )}
 
@@ -411,7 +406,8 @@ function App() {
                   sentences.map((s, idx) => (
                     <span key={idx}>
                       <span ref={el => { sentenceRefs.current[idx] = el; }}
-                        className={`sentence ${s.status} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
+                        className={`sentence ${s.status} ${s.status === 'flagged' ? `issue-${issueMeta(s.issue_type).key} line-${issueMeta(s.issue_type).line}` : ''} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
+                        title={s.status === 'flagged' ? issueTitle(s.issue_type) : undefined}
                         onClick={() => s.text && selectSentence(idx)}>
                         {s.text}
                       </span>
@@ -493,7 +489,7 @@ function App() {
                 </div>
                 {ppl.count > 0 ? (
                   <PplStrip results={diagnosis.results} calibration={calib} selected={selectedSentenceIndex}
-                    onSelect={i => selectSentence(i, true)} issueTitle={issueTitle} />
+                    onSelect={i => selectSentence(i, true)} />
                 ) : (
                   progress.current > 0 && <p className="card-foot">当前为云端模式，不计算困惑度分布。</p>
                 )}
@@ -521,12 +517,19 @@ function App() {
                     <div className="sub-title">问题构成</div>
                     {breakdown.length ? (
                       <ul className="breakdown">
-                        {breakdown.map(b => (
-                          <li key={b.type}>
-                            <span><i className={`dot tone-${issueTone(b.type)}`} />{issueTitle(b.type)}</span>
-                            <span className="num">{b.count}</span>
-                          </li>
-                        ))}
+                        {breakdown.map(b => {
+                          const m = issueMeta(b.type);
+                          const max = breakdown[0].count;
+                          return (
+                            <li key={b.type}>
+                              <span className="breakdown-name"><i className={`swatch issue-${m.key}`} aria-hidden />{m.title}</span>
+                              <span className="num">{b.count}</span>
+                              <span className="breakdown-track" aria-hidden>
+                                <span className={`breakdown-fill issue-${m.key}`} style={{ transform: `scaleX(${b.count / max})` }} />
+                              </span>
+                            </li>
+                          );
+                        })}
                       </ul>
                     ) : <p className="card-foot">暂无需修改的句子。</p>}
                   </div>
@@ -564,9 +567,13 @@ function App() {
                 ) : (
                   <>
                     <div className="verdict-row">
-                      <span className={`tag tone-${selected.status === 'flagged' ? issueTone(selected.issue_type) : 'good'}`}>
-                        {selected.status === 'flagged' ? issueTitle(selected.issue_type) : selected.status === 'early_exit' ? '通过 · 快速判定' : '通过'}
-                      </span>
+                      {selected.status === 'flagged' ? (
+                        <span className={`tag issue-tag issue-${issueMeta(selected.issue_type).key}`}>
+                          <i className={`swatch issue-${issueMeta(selected.issue_type).key}`} aria-hidden />{issueTitle(selected.issue_type)}
+                        </span>
+                      ) : (
+                        <span className="tag tone-good">{selected.status === 'early_exit' ? '通过 · 快速判定' : '通过'}</span>
+                      )}
                       {selected.severity && <span className="verdict-sev">严重度 {selected.severity === 'high' ? '高' : selected.severity === 'medium' ? '中' : '低'}</span>}
                     </div>
                     <blockquote className="quote" lang="ru">{selected.text}</blockquote>
@@ -666,13 +673,16 @@ function App() {
                     })
                     .map(diag => {
                       const isFlagged = diag.status === 'flagged';
-                      const tone = isFlagged ? issueTone(diag.issue_type) : 'good';
+                      const kind = !isFlagged ? 'tone-good' : isInfraIssue(diag.issue_type) ? 'tone-muted' : `issue-${issueMeta(diag.issue_type).key}`;
                       return (
-                        <article key={diag.index} className={`diag-card tone-${tone} ${selectedSentenceIndex === diag.index ? 'is-selected' : ''}`}
+                        <article key={diag.index} className={`diag-card ${kind} ${selectedSentenceIndex === diag.index ? 'is-selected' : ''}`}
                           onClick={() => selectSentence(diag.index, true)}>
                           <div className="diag-head">
                             <span className="diag-index mono">#{String(diag.index + 1).padStart(2, '0')}</span>
-                            <span className="diag-title">{isFlagged ? issueTitle(diag.issue_type) : diag.status === 'early_exit' ? '通过 · 快速判定' : '通过'}</span>
+                            <span className="diag-title">
+                              {isFlagged && <i className={`swatch issue-${issueMeta(diag.issue_type).key}`} aria-hidden />}
+                              {isFlagged ? issueTitle(diag.issue_type) : diag.status === 'early_exit' ? '通过 · 快速判定' : '通过'}
+                            </span>
                             <span className={`diag-ppl num ${pplClass(diag.ppl)}`}>{typeof diag.ppl === 'number' ? `PPL ${diag.ppl}` : 'PPL —'}</span>
                           </div>
                           <p className="diag-text" lang="ru">{diag.text.length > 140 ? `${diag.text.substring(0, 140)}…` : diag.text}</p>

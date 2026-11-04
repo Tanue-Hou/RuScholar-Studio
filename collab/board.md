@@ -14,7 +14,7 @@
 | [RS-0005](tasks/RS-0005-refactor-diagnostic-pipeline.md) | 诊断流水线去重 | 待办 | 建议 claude 设计 / codex 实现 | RS-0002 |
 | [RS-0006](tasks/RS-0006-ppl-performance.md) | PPL 计算向量化 | 待办 | 建议 codex | — |
 | [RS-0007](tasks/RS-0007-frontend-modularize.md) | 前端 App.tsx 拆分 | 待办 | 建议 antigravity | — |
-| [RS-0018](tasks/RS-0018-ui-refine.md) | 原界面去 AI 味、补充学科阈值/困惑度分布/词法汇总等信息 | 待验收 | claude@cloud | RS-0017 |
+| [RS-0018](tasks/RS-0018-ui-refine.md) | 原界面去 AI 味、苹果式质感、问题分色、补充学科阈值/困惑度分布/词法汇总 | 待验收 | claude@cloud | RS-0017 |
 
 ## P2
 | 任务 | 内容 | 状态 | 负责 | 依赖 |

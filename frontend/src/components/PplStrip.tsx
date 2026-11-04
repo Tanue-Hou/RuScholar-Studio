@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ISSUE_ORDER, issueMeta, issueTitle } from '../lib/issues';
 import type { Calibration, DiagnosticResult } from '../types';
 
 interface Props {
@@ -7,7 +8,6 @@ interface Props {
   calibration: Calibration;
   selected: number | null;
   onSelect: (index: number) => void;
-  issueTitle: (type: string | null) => string;
 }
 
 const W = 400;
@@ -16,10 +16,10 @@ const PAD_TOP = 6;
 
 /**
  * Per-sentence perplexity, in reading order. One bar per sentence, coloured by
- * verdict (status colour + legend label, never colour alone); dashed lines mark
+ * issue type (palette slot + legend label + tooltip, never colour alone); dashed lines mark
  * the discipline's calibrated PPL bounds. Hover shows the value, click selects.
  */
-export function PplStrip({ results, calibration, selected, onSelect, issueTitle }: Props) {
+export function PplStrip({ results, calibration, selected, onSelect }: Props) {
   const [hover, setHover] = useState<number | null>(null);
   const n = results.length;
   if (!n) return null;
@@ -41,7 +41,7 @@ export function PplStrip({ results, calibration, selected, onSelect, issueTitle 
           {values.map((v, i) => {
             const r = results[i];
             const x = i * slot + gap / 2;
-            const cls = !r ? 'pending' : r.status === 'flagged' ? 'flagged' : 'passed';
+            const cls = !r ? 'pending' : r.status === 'flagged' ? `flagged issue-${issueMeta(r.issue_type).key}` : 'passed';
             const top = v === null ? H - 2 : y(v);
             return (
               <g key={i}>
@@ -63,12 +63,17 @@ export function PplStrip({ results, calibration, selected, onSelect, issueTitle 
           <div className="ppl-tooltip" style={{ left: `${((hover + 0.5) / n) * 100}%` }} role="status">
             <span className="mono">#{hover + 1}</span>
             <strong className="num">{typeof hovered.ppl === 'number' ? `PPL ${hovered.ppl}` : 'PPL —'}</strong>
-            <span>{hovered.status === 'flagged' ? issueTitle(hovered.issue_type) : '通过'}</span>
+            <span>
+              {hovered.status === 'flagged' && <i className={`swatch issue-${issueMeta(hovered.issue_type).key}`} aria-hidden />}
+              {hovered.status === 'flagged' ? issueTitle(hovered.issue_type) : '通过'}
+            </span>
           </div>
         )}
       </div>
       <figcaption className="ppl-legend">
-        <span><i className="swatch flagged" />需修改</span>
+        {ISSUE_ORDER.filter(t => results.some(r => r?.status === 'flagged' && r.issue_type === t)).map(t => (
+          <span key={t}><i className={`swatch issue-${issueMeta(t).key}`} />{issueMeta(t).title}</span>
+        ))}
         <span><i className="swatch passed" />通过</span>
         <span><i className="swatch dash" />本学科区间 {calibration.ppl_low}–{calibration.ppl_high}</span>
         <span className="ppl-legend-note">按句序 · 点击柱查看</span>
