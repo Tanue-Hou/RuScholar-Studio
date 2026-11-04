@@ -34,6 +34,58 @@ def extract_citation_keys(sentence: str) -> list[str]:
                         keys.append(clean_key)
     return keys
 
+async def resolve_reference(session_ref: dict, key: str, query_text: str) -> dict:
+    """
+    Find evidence snippets for one citation key, in order:
+      1. local full text (BM25 over uploaded documents),
+      2. the session's online cache,
+      3. OpenAlex, queried by BibTeX metadata or the parsed bibliography line.
+    Failed online lookups are cached as None so they are not retried.
+    Returns {"title", "author", "year", "snippets", "source"}; source is
+    "local", "online" or "unknown" (snippets is then empty).
+    """
+    key_lower = key.lower()
+    retrievers = session_ref.get("retrievers", {})
+    bibtex_db = session_ref.get("bibtex", {})
+    online_cache = session_ref.setdefault("online_cache", {})
+    bib_mapping = session_ref.get("bib_mapping", {})
+
+    result = {"title": f"文献 {key}", "author": "", "year": "", "snippets": [], "source": "unknown"}
+
+    if key_lower in retrievers:
+        retrieved = retrievers[key_lower].retrieve(query_text, top_k=3)
+        meta = bibtex_db.get(key_lower, {})
+        result.update(
+            snippets=[r["text"] for r in retrieved],
+            source="local",
+            title=meta.get("title", result["title"]),
+            author=meta.get("author", ""),
+            year=meta.get("year", ""),
+        )
+        return result
+
+    if key_lower in online_cache:
+        online_res = online_cache[key_lower]
+    else:
+        query_str = ""
+        if key_lower in bibtex_db:
+            meta = bibtex_db[key_lower]
+            query_str = f"{meta.get('title', '')} {meta.get('author', '')} {meta.get('year', '')}".strip()
+        elif key_lower in bib_mapping:
+            query_str = bib_mapping[key_lower]
+        if not query_str:
+            return result
+        online_res = await asyncio.to_thread(fetch_openalex_abstract, query_str)
+        online_cache[key_lower] = online_res or None
+
+    if online_res:
+        result.update(
+            snippets=[online_res["abstract"]] if online_res["abstract"] else [],
+            title=online_res["title"],
+            source="online",
+        )
+    return result
+
 async def perform_nli_citation_audit(
     text_str: str, 
     session_id: str, 
@@ -50,66 +102,13 @@ async def perform_nli_citation_audit(
         return []
         
     session_ref = session_references.get(session_id, {})
-    retrievers = session_ref.get("retrievers", {})
-    bibtex_db = session_ref.get("bibtex", {})
-    online_cache = session_ref.get("online_cache", {})
-    bib_mapping = session_ref.get("bib_mapping", {})
-    
+
     audits = []
     for key in keys:
-        key_lower = key.lower()
-        # 1. Local RAG first
-        if key_lower in retrievers:
-            retriever = retrievers[key_lower]
-            retrieved = retriever.retrieve(text_str, top_k=3)
-            snippets = [r["text"] for r in retrieved]
-            source = "local"
-            
-            # Fetch BibTeX metadata if available for titles
-            meta = bibtex_db.get(key_lower, {})
-            title = meta.get("title", f"文献 {key}")
-            author = meta.get("author", "")
-            year = meta.get("year", "")
-        else:
-            # 2. Check online cache first
-            if key_lower in online_cache:
-                cache_entry = online_cache[key_lower]
-                if cache_entry:
-                    snippets = [cache_entry["abstract"]] if cache_entry["abstract"] else []
-                    title = cache_entry["title"]
-                    author = ""
-                    year = ""
-                    source = "online"
-                else:
-                    continue  # Cached retrieval failure
-            else:
-                # 3. Retrieve online using citation mapping
-                query_str = ""
-                # Try from BibTeX metadata first if key exists there
-                if key_lower in bibtex_db:
-                    meta = bibtex_db[key_lower]
-                    query_str = f"{meta.get('title', '')} {meta.get('author', '')} {meta.get('year', '')}".strip()
-                # Otherwise, fallback to the references list parsed from text
-                elif key_lower in bib_mapping:
-                    query_str = bib_mapping[key_lower]
-                
-                # If no search query, we cannot audit
-                if not query_str:
-                    continue
-                    
-                online_res = await asyncio.to_thread(fetch_openalex_abstract, query_str)
-                
-                if online_res:
-                    online_cache[key_lower] = online_res
-                    snippets = [online_res["abstract"]] if online_res["abstract"] else []
-                    title = online_res["title"]
-                    author = ""
-                    year = ""
-                    source = "online"
-                else:
-                    online_cache[key_lower] = None
-                    continue
-            
+        ref = await resolve_reference(session_ref, key, text_str)
+        snippets, title, author, year, source = (
+            ref["snippets"], ref["title"], ref["author"], ref["year"], ref["source"]
+        )
         if not snippets:
             continue
             
@@ -231,55 +230,14 @@ async def bind_evidence(claim: str, references: list[str], session_id: str) -> d
         }
         
     session_ref = session_references.get(session_id, {})
-    retrievers = session_ref.get("retrievers", {})
-    bibtex_db = session_ref.get("bibtex", {})
-    online_cache = session_ref.get("online_cache", {})
-    bib_mapping = session_ref.get("bib_mapping", {})
-    
+
     bound_references = []
     for key in references:
-        key_lower = key.lower()
-        snippets = []
-        source = "unknown"
-        title = f"文献 {key}"
-        author = ""
-        year = ""
-        
-        if key_lower in retrievers:
-            retriever = retrievers[key_lower]
-            retrieved = retriever.retrieve(claim, top_k=3)
-            snippets = [r["text"] for r in retrieved]
-            source = "local"
-            
-            meta = bibtex_db.get(key_lower, {})
-            title = meta.get("title", title)
-            author = meta.get("author", "")
-            year = meta.get("year", "")
-        else:
-            if key_lower in online_cache:
-                cache_entry = online_cache[key_lower]
-                if cache_entry:
-                    snippets = [cache_entry["abstract"]] if cache_entry["abstract"] else []
-                    title = cache_entry["title"]
-                    source = "online"
-            else:
-                query_str = ""
-                if key_lower in bibtex_db:
-                    meta = bibtex_db[key_lower]
-                    query_str = f"{meta.get('title', '')} {meta.get('author', '')} {meta.get('year', '')}".strip()
-                elif key_lower in bib_mapping:
-                    query_str = bib_mapping[key_lower]
-                    
-                if query_str:
-                    online_res = await asyncio.to_thread(fetch_openalex_abstract, query_str)
-                    if online_res:
-                        online_cache[key_lower] = online_res
-                        snippets = [online_res["abstract"]] if online_res["abstract"] else []
-                        title = online_res["title"]
-                        source = "online"
-                    else:
-                        online_cache[key_lower] = None
-                        
+        ref = await resolve_reference(session_ref, key, claim)
+        snippets, title, author, year, source = (
+            ref["snippets"], ref["title"], ref["author"], ref["year"], ref["source"]
+        )
+
         bound_references.append({
             "citation_key": key,
             "title": title,

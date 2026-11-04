@@ -1,61 +1,45 @@
-import sys
-import os
 import asyncio
-from services.shared_state import session_references, MODEL_PATH
-from naturalization_layer.ppl_engine import PPLEngine
-from naturalization_layer.llm_judge import StyleJudge
-from naturalization_layer.nli_judge import NLICitationJudge
+import os
+
 from naturalization_layer.citation_integrity import check_citation_integrity, extract_bibliography_mapping
-from services.diagnostic_service import run_sentence_diagnose_batch
-from services.citation_audit_service import perform_nli_citation_audit
-from services.report_service import export_report_data
-from services.diagnostic_service import get_discipline_rules
+from naturalization_layer.llm_client import cloud_model_for
 from naturalization_layer.rules_engine import analyze_text_rules
+from services.citation_audit_service import perform_nli_citation_audit, resolve_reference
+from services.diagnostic_service import get_discipline_rules, run_sentence_diagnose_batch
+from services.model_registry import registry
+from services.reference_service import (
+    ensure_reference_session, ingest_bibtex, ingest_reference_document,
+    list_reference_keys, reset_reference_session,
+)
+from services.report_service import export_report_data
+from services.shared_state import MODEL_PATH, session_references
 
 # Import FastMCP
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("RuScholar Studio MCP Server")
 
-# Lazily initialized model instances
-engine = None
-judge = None
-citation_judge = None
 
 def get_engines(engine_type: str):
-    global engine, judge, citation_judge
-    
-    # Check if local model file exists
-    if os.path.exists(MODEL_PATH):
-        if engine is None:
-            engine = PPLEngine(MODEL_PATH)
-        engine_inst = engine
-    else:
-        engine_inst = None
-
-    if engine_type == "local":
-        if engine_inst:
-            if judge is None:
-                judge = StyleJudge(engine_inst.llm)
-            judge_inst = judge
-        else:
+    """
+    (engine_or_None, style_judge, citation_judge) from the shared ModelRegistry.
+    Unlike the Web UI, MCP refuses to silently degrade: "local" without a model
+    raises with instructions to download it.
+    """
+    engine_inst = registry.get_engine()
+    if engine_type == "local" and engine_inst is None:
+        if registry.model_exists():
             raise ValueError(
-                f"Local model not found at '{MODEL_PATH}'. "
-                f"To resolve this, you can call the MCP tool 'thesis_download_model_tool' to download it automatically, "
-                f"or run the following command in your terminal to download manually: "
-                f"python -c \"from naturalization_layer.model_downloader import download_model, MODEL_PATH; download_model(MODEL_PATH)\""
+                f"Local model at '{registry.model_path}' failed to load: {registry.load_error}"
             )
-    else:
-        judge_inst = StyleJudge(None)
-
-    if os.path.exists(MODEL_PATH):
-        if citation_judge is None:
-            if engine_inst:
-                citation_judge = NLICitationJudge(engine_inst.llm)
-    if citation_judge is None:
-        citation_judge = NLICitationJudge(None)
-
-    return engine_inst, judge_inst, citation_judge
+        raise ValueError(
+            f"Local model not found at '{registry.model_path}'. "
+            f"To resolve this, you can call the MCP tool 'thesis_download_model_tool' to download it automatically, "
+            f"or run the following command in your terminal to download manually: "
+            f"python -c \"from naturalization_layer.model_downloader import download_model; "
+            f"from services.shared_state import MODEL_PATH; download_model(MODEL_PATH)\""
+        )
+    return engine_inst, registry.get_style_judge(engine_type), registry.get_citation_judge()
 
 from enum import Enum
 
@@ -90,14 +74,12 @@ async def analyze_manuscript(
     base_url: str = "",
     discipline: str = None
 ) -> list[dict]:
-    # Initialize engines
     engine_inst, judge_inst, cit_judge = get_engines(engine_type)
-    
+
     # 1. Resolve discipline
     if not discipline or discipline == "UNIVERSAL":
         use_cloud = bool(api_key and api_key.strip())
-        actual_engine = ("deepseek-flash" if "flash" in engine_type else "deepseek-v4-pro") if use_cloud else "local"
-        
+        actual_engine = cloud_model_for(engine_type) if use_cloud else "local"
         try:
             if actual_engine == "local" and not engine_inst:
                 discipline_str = "UNIVERSAL"
@@ -111,7 +93,7 @@ async def analyze_manuscript(
         discipline_str = discipline
 
     # 2. Run diagnostics
-    results = await run_sentence_diagnose_batch(
+    return await run_sentence_diagnose_batch(
         text=text,
         session_id=session_id,
         engine_type=engine_type,
@@ -122,7 +104,6 @@ async def analyze_manuscript(
         judge_inst=judge_inst,
         citation_judge=cit_judge
     )
-    return results
 
 async def audit_citations(
     text: str,
@@ -133,36 +114,22 @@ async def audit_citations(
 ) -> dict:
     # 1. Global consistency check
     integrity_report = check_citation_integrity(text)
-    
-    # 2. Initialize mapping in session references
-    if session_id not in session_references:
-        session_references[session_id] = {
-            "bibtex": {},
-            "corpus": {},
-            "retrievers": {},
-            "online_cache": {},
-            "bib_mapping": {}
-        }
-    session_references[session_id]["bib_mapping"] = extract_bibliography_mapping(text)
-    
+
+    # 2. Map numbered citations to the manuscript's bibliography
+    ensure_reference_session(session_id)["bib_mapping"] = extract_bibliography_mapping(text)
+
     # 3. Retrieve engine for citation NLI verification
-    engine_inst, judge_inst, cit_judge = get_engines(engine_type)
-    
+    _, _, cit_judge = get_engines(engine_type)
+
     # 4. Perform sentence-level citation audits
-    rules_res = analyze_text_rules(text)
-    sentences = rules_res["sentences"]
-    
     all_sentence_audits = []
-    for s in sentences:
+    for s in analyze_text_rules(text)["sentences"]:
         audits = await perform_nli_citation_audit(
             s, session_id, engine_type, api_key, base_url, cit_judge
         )
         if audits:
-            all_sentence_audits.append({
-                "sentence": s,
-                "audits": audits
-            })
-            
+            all_sentence_audits.append({"sentence": s, "audits": audits})
+
     return {
         "integrity_warnings": integrity_report.get("warnings", []),
         "sentence_citation_audits": all_sentence_audits
@@ -173,62 +140,8 @@ async def retrieve_evidence(
     citation_key: str,
     session_id: str = "mcp_session"
 ) -> dict:
-    session_ref = session_references.get(session_id, {})
-    retrievers = session_ref.get("retrievers", {})
-    bibtex_db = session_ref.get("bibtex", {})
-    online_cache = session_ref.get("online_cache", {})
-    bib_mapping = session_ref.get("bib_mapping", {})
-    
-    key_lower = citation_key.lower()
-    snippets = []
-    title = f"文献 {citation_key}"
-    author = ""
-    year = ""
-    source = "unknown"
-    
-    # 1. Local retriever check
-    if key_lower in retrievers:
-        retriever = retrievers[key_lower]
-        retrieved = retriever.retrieve(claim, top_k=3)
-        snippets = [r["text"] for r in retrieved]
-        source = "local"
-        meta = bibtex_db.get(key_lower, {})
-        title = meta.get("title", title)
-        author = meta.get("author", "")
-        year = meta.get("year", "")
-    else:
-        # 2. Check online cache / retrieve
-        if key_lower in online_cache:
-            cache_entry = online_cache[key_lower]
-            if cache_entry:
-                snippets = [cache_entry["abstract"]] if cache_entry["abstract"] else []
-                title = cache_entry["title"]
-                source = "online"
-        else:
-            query_str = ""
-            if key_lower in bibtex_db:
-                meta = bibtex_db[key_lower]
-                query_str = f"{meta.get('title', '')} {meta.get('author', '')} {meta.get('year', '')}".strip()
-            elif key_lower in bib_mapping:
-                query_str = bib_mapping[key_lower]
-                
-            if query_str:
-                from naturalization_layer.rag_retriever import fetch_openalex_abstract
-                online_res = await asyncio.to_thread(fetch_openalex_abstract, query_str)
-                if online_res:
-                    online_cache[key_lower] = online_res
-                    snippets = [online_res["abstract"]] if online_res["abstract"] else []
-                    title = online_res["title"]
-                    source = "online"
-                    
-    return {
-        "citation_key": citation_key,
-        "title": title,
-        "author": author,
-        "year": year,
-        "snippets": snippets,
-        "source": source
-    }
+    ref = await resolve_reference(session_references.get(session_id, {}), citation_key, claim)
+    return {"citation_key": citation_key, **ref}
 
 async def suggest_revision(
     sentence: str,
@@ -240,13 +153,13 @@ async def suggest_revision(
     base_url: str = ""
 ) -> dict:
     engine_inst, judge_inst, cit_judge = get_engines(engine_type)
-    
+
     # Analyze text rules to find any Track A triggers
     rules_res = analyze_text_rules(sentence)
     diag_rules = rules_res["sentence_diagnostics"][0] if rules_res["sentence_diagnostics"] else {}
-    
+
     active_rules = get_discipline_rules(discipline)
-    
+
     diag = await asyncio.to_thread(
         judge_inst.diagnose_sentence,
         sentence,
@@ -259,7 +172,7 @@ async def suggest_revision(
         api_key=api_key,
         base_url=base_url
     )
-    
+
     # Return formatted suggestion
     issues = diag.get("issues", [])
     if issues:
@@ -273,14 +186,13 @@ async def suggest_revision(
             "rewrite_suggestion": issue.get("rewrite_suggestion"),
             "think": diag.get("think", "")
         }
-    else:
-        return {
-            "sentence": sentence,
-            "status": "passed",
-            "explanation": "No major stylistic issue detected.",
-            "rewrite_suggestion": sentence,
-            "think": diag.get("think", "")
-        }
+    return {
+        "sentence": sentence,
+        "status": "passed",
+        "explanation": "No major stylistic issue detected.",
+        "rewrite_suggestion": sentence,
+        "think": diag.get("think", "")
+    }
 
 def export_report(
     diagnostics: list[dict],
@@ -301,14 +213,13 @@ def check_model_installed() -> dict:
                 "expected_size_bytes": EXPECTED_SIZE,
                 "message": "Local model is installed and verified."
             }
-        else:
-            return {
-                "installed": False,
-                "model_path": MODEL_PATH,
-                "size_bytes": size,
-                "expected_size_bytes": EXPECTED_SIZE,
-                "message": f"Local model file exists but has incorrect size ({size} bytes, expected {EXPECTED_SIZE} bytes)."
-            }
+        return {
+            "installed": False,
+            "model_path": MODEL_PATH,
+            "size_bytes": size,
+            "expected_size_bytes": EXPECTED_SIZE,
+            "message": f"Local model file exists but has incorrect size ({size} bytes, expected {EXPECTED_SIZE} bytes)."
+        }
     return {
         "installed": False,
         "model_path": MODEL_PATH,
@@ -321,6 +232,7 @@ async def download_model_tool() -> dict:
     from naturalization_layer.model_downloader import download_model
     try:
         await asyncio.to_thread(download_model, MODEL_PATH)
+        registry.reset()  # pick up the new file on next use
         return {
             "status": "success",
             "model_path": MODEL_PATH,
@@ -337,105 +249,47 @@ async def register_references(
     bibtex_text: str = "",
     pdf_paths: list[str] = None
 ) -> dict:
-    from naturalization_layer.rag_retriever import parse_bibtex, chunk_text, BM25Retriever
-    import re
-    
-    if session_id not in session_references:
-        session_references[session_id] = {
-            "bibtex": {},
-            "corpus": {},
-            "retrievers": {},
-            "online_cache": {},
-            "bib_mapping": {}
-        }
-        
+    ensure_reference_session(session_id)
+
     bib_keys_added = []
-    pdf_keys_added = []
-    
     if bibtex_text and bibtex_text.strip():
         try:
-            bib_entries = parse_bibtex(bibtex_text)
-            session_references[session_id]["bibtex"].update(bib_entries)
-            bib_keys_added = list(bib_entries.keys())
+            bib_keys_added = ingest_bibtex(session_id, bibtex_text)
         except Exception as e:
             raise ValueError(f"Failed to parse BibTeX: {str(e)}")
-            
-    if pdf_paths:
-        for path in pdf_paths:
-            if not os.path.exists(path):
-                raise FileNotFoundError(f"PDF file not found at path: {path}")
-            filename = os.path.basename(path)
-            name_part, ext = os.path.splitext(filename)
-            clean_name = re.sub(r'[\[\]]', '', name_part).strip().lower()
-            
-            try:
-                with open(path, "rb") as f:
-                    contents = f.read()
-            except Exception as e:
-                raise IOError(f"Failed to read file {path}: {str(e)}")
-                
-            text = ""
-            if ext.lower() == ".pdf":
-                try:
-                    from pypdf import PdfReader
-                    import io
-                    reader = PdfReader(io.BytesIO(contents))
-                    text = ""
-                    for page in reader.pages:
-                        t = page.extract_text()
-                        if t:
-                            text += t + "\n"
-                except Exception as e:
-                    raise IOError(f"Failed to parse PDF {filename}: {str(e)}")
-            else:
-                try:
-                    text = contents.decode("utf-8")
-                except Exception as e:
-                    raise IOError(f"Failed to decode text file {filename}: {str(e)}")
-                    
-            if text.strip():
-                chunks = chunk_text(text)
-                corpus_entries = []
-                for idx, chunk in enumerate(chunks):
-                    corpus_entries.append({
-                        "text": chunk,
-                        "metadata": {
-                            "filename": filename,
-                            "key": clean_name,
-                            "chunk_index": idx
-                        }
-                    })
-                session_references[session_id]["corpus"][clean_name] = corpus_entries
-                session_references[session_id]["retrievers"][clean_name] = BM25Retriever(corpus_entries)
-                pdf_keys_added.append(clean_name)
-                
+
+    pdf_keys_added = []
+    for path in pdf_paths or []:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"PDF file not found at path: {path}")
+        try:
+            with open(path, "rb") as f:
+                contents = f.read()
+        except Exception as e:
+            raise IOError(f"Failed to read file {path}: {str(e)}")
+        try:
+            key = ingest_reference_document(session_id, os.path.basename(path), contents)
+        except Exception as e:
+            raise IOError(f"Failed to parse {os.path.basename(path)}: {str(e)}")
+        if key:
+            pdf_keys_added.append(key)
+
+    totals = list_reference_keys(session_id)
     return {
         "status": "success",
         "bibtex_keys_added": bib_keys_added,
         "pdf_keys_added": pdf_keys_added,
-        "total_bibtex_keys": list(session_references[session_id]["bibtex"].keys()),
-        "total_pdf_keys": list(session_references[session_id]["retrievers"].keys())
+        "total_bibtex_keys": totals["bibtex_keys"],
+        "total_pdf_keys": totals["pdf_keys"]
     }
 
 def clear_references(session_id: str) -> dict:
-    if session_id in session_references:
-        session_references[session_id] = {
-            "bibtex": {},
-            "corpus": {},
-            "retrievers": {},
-            "online_cache": {},
-            "bib_mapping": {}
-        }
+    if reset_reference_session(session_id):
         return {"status": "success", "message": f"References for session '{session_id}' cleared."}
     return {"status": "success", "message": f"Session '{session_id}' was not initialized or already empty."}
 
 def list_references(session_id: str) -> dict:
-    session_ref = session_references.get(session_id, {})
-    return {
-        "session_id": session_id,
-        "bibtex_keys": list(session_ref.get("bibtex", {}).keys()),
-        "pdf_keys": list(session_ref.get("retrievers", {}).keys())
-    }
+    return {"session_id": session_id, **list_reference_keys(session_id)}
 
 # ==========================================
 # DECORATED MCP TOOLS (New Thesis prefixed APIs returning uniform schemas)
@@ -779,11 +633,19 @@ async def thesis_judge_claim_evidence_nli(
     """
     engine_type_str = engine_type.value if hasattr(engine_type, 'value') else engine_type
     _, _, cit_judge = get_engines(engine_type_str)
-    
-    nli_res = await asyncio.to_thread(
-        cit_judge.verify_citation,
-        claim, snippets, engine_type_str, api_key, base_url
-    )
+
+    if engine_type_str == "local":
+        # Local llama.cpp context is shared; serialise like every other local call.
+        async with registry.model_lock:
+            nli_res = await asyncio.to_thread(
+                cit_judge.verify_citation,
+                claim, snippets, engine_type_str, api_key, base_url
+            )
+    else:
+        nli_res = await asyncio.to_thread(
+            cit_judge.verify_citation,
+            claim, snippets, engine_type_str, api_key, base_url
+        )
     
     return {
         "summary": f"NLI verification status: {nli_res['status']}",

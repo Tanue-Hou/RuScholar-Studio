@@ -6,6 +6,104 @@ up the work without re-reading the whole diff.
 
 ---
 
+## 2026-11-04 — Architecture review, phase 2: service-layer consolidation
+
+Branch: `claude/sharp-einstein-dmbnvw` · Base commit: `0c10cf5` (phase 1)
+
+Goal: the Web adapter (`backend/main.py`) and the MCP adapter
+(`mcp_server/server.py`) should only translate requests. Engine loading,
+reference storage and the diagnostic pipeline each now have exactly one
+implementation under `services/` or `naturalization_layer/`.
+
+### New modules — where things live now
+| Module | Responsibility | Replaces |
+|---|---|---|
+| `services/settings.py` | Every env var in one frozen `Settings`; loads `.env` from the project root (real env vars win; `RUSCHOLAR_SKIP_DOTENV=1` disables). | Scattered `os.getenv`; `.env` was never loaded. |
+| `services/rules_config.py` | Lazily cached polishing-rule clusters and calibration; `get_discipline_rules()`, `get_calibration()`. | Duplicate loaders + `get_discipline_rules` in `main.py` and `diagnostic_service.py`. |
+| `services/model_registry.py` | `registry`: lazy, thread-safe GGUF load, cached `StyleJudge`/`NLICitationJudge`, `model_lock`, `reset()` after download; a failed load is remembered (not retried per request). | Three lazy-loading blocks (main diagnose, main detect_discipline, MCP `get_engines`). |
+| `services/session_store.py` | `ExpiringDict`: dict-compatible store with idle TTL. | Plain dicts that grew forever. |
+| `services/reference_service.py` | Reference sessions: `ensure_reference_session`, `ingest_bibtex`, `ingest_reference_document`, `reset_reference_session`, `list_reference_keys`. | `upload_references` (Web) and `register/clear/list_references` (MCP), plus 4 copies of the session dict literal. |
+| `naturalization_layer/llm_client.py` | `call_openai_compatible`, `clean_json_text`, `build_qwen_prompt`, `complete_local`, `resolve_cloud_model`, `cloud_model_for`. | Copies of `_call_deepseek_api` / `_clean_json_text` / engine-name mapping in both judges and the pipeline. |
+| `naturalization_layer/discipline.py` | `DISCIPLINES`, `detect_discipline_by_keywords`. | Three keyword fallback tables (two in `main.py`, one in `llm_judge.py`), all slightly different. |
+| `naturalization_layer/document_parser.py` | Added `parse_document_bytes` (PDF/DOCX/UTF-8). | `parse_docx` / `parse_pdf_bytes` in `main.py`, inline PDF parsing in MCP. |
+
+`services/shared_state.py` still exports `session_references`, `model_lock` and
+`MODEL_PATH` (now `session_references` is an `ExpiringDict`), plus the new
+`pending_analyses` (was `active_sessions` in `main.py`).
+
+### Merged code paths
+- **Diagnostic pipeline** (`services/diagnostic_service.py`, 554 → 390 lines):
+  `process_sentence_local` and `process_sentence_cloud` (about 180 near-identical lines
+  each), plus their duplicated aggregation loops, are now one `process_sentence`. Mode
+  differences are explicit branches: local = PPL early exit and suspicion gating under
+  `model_lock`; hybrid = local PPL with no early exit, then the cloud judge; cloud =
+  judge only. The shared steps are small helpers (`_apply_judgement`, which includes the
+  low-PPL veto, `_apply_citation_audits`, `_RunningRisks`, and so on).
+- **Reference lookup** (`services/citation_audit_service.resolve_reference`): local
+  BM25 → online cache → OpenAlex. This was written out three times
+  (`perform_nli_citation_audit`, `bind_evidence`, MCP `retrieve_evidence`).
+- **Judges** (`llm_judge.py`, `nli_judge.py`): prompts are unchanged and built with
+  `build_qwen_prompt`. `_call_deepseek_api` / `_clean_json_text` remain as one-line
+  delegate methods because tests patch them per instance.
+- Adapters shrank: `backend/main.py` 468 → 267 lines; the helper section of
+  `mcp_server/server.py` shrank by about half (the file is 1195 → ~1060 lines; the rest
+  is the 17 decorated tool wrappers and their docstrings).
+
+### Behaviour changes (intentional, small)
+1. `.env` is now actually loaded. `DEEPSEEK_API_KEY` / `DEEPSEEK_BASE_URL` act as
+   fallbacks when a cloud/hybrid request has an empty key. Discipline auto-detection
+   still only goes to the cloud when the request itself carries a key.
+2. Sessions expire after `RUSCHOLAR_SESSION_TTL` seconds of inactivity (default 7200).
+   This covers both pending analyses and uploaded references.
+3. A model that fails to load is not reloaded on every request. `registry.reset()`
+   (called automatically after a model download) allows a retry.
+4. MCP `get_engines("local")` with a model file that fails to load now raises
+   `ValueError("... failed to load: <reason>")` instead of the raw loader exception.
+5. MCP `register_references` now also accepts `.docx`, via the shared parser.
+6. `/api/detect_discipline`'s keyword fallback now uses the full shared table (it
+   includes `ARTS_SPORTS`). The old copy in `main.py` was shorter.
+7. `/api/upload` returns 400 instead of 500 when a file cannot be read.
+8. MCP `thesis_judge_claim_evidence_nli` now holds `model_lock` for local inference.
+   It was the only local llama.cpp call without the lock.
+9. MCP `retrieve_evidence` now caches failed OpenAlex lookups, like the Web path does.
+10. `NLICitationJudge` JSON cleaning now also handles output that has `</think>` but no
+    opening tag. It gets this from the shared `clean_json_text`.
+11. The MCP citation judge is no longer stuck permanently as a model-less judge when
+    the model appears after the first call.
+
+New env vars are documented in `.env.example` and in the README tables:
+`RUSCHOLAR_SESSION_TTL`, `RUSCHOLAR_CORS_ORIGINS`, `RUSCHOLAR_CALIBRATION_PATH`,
+`RUSCHOLAR_CLOUD_TIMEOUT`.
+
+### Verification
+- **Golden snapshot:** before refactoring, the output of `run_sentence_diagnose_stream`
+  was recorded with deterministic mock engine/judge/NLI/OpenAlex. It covers 6 runs
+  (local, hybrid-pro, cloud-flash × model present/absent), 114 events, and includes the
+  early-exit, rule-pass, low-PPL-veto, citation-gap and citation-audit paths. After the
+  refactor the JSON is **byte-identical**. The script lived in the session scratchpad and
+  is not committed; `tests/test_service_layer.py` covers the same mode branches.
+- `pytest` → **80 passed, 1 skipped** (the skip is the real-GGUF test). New:
+  `tests/test_service_layer.py` (18 tests: settings/.env, TTL store, LLM client and
+  env-key fallback, keyword classifier, registry load and caching, MCP load-failure
+  message, reference ingestion, `resolve_reference` order and failure cache, and the
+  local/hybrid/cloud pipeline branches).
+- `tests/test_llm_judge.py` now imports `llama_cpp` only inside the real-model test, so
+  its mock tests run without llama-cpp-python installed.
+- End-to-end with FastAPI TestClient and no model: check_model → detect_discipline →
+  upload → session → upload_references → diagnose SSE (`init`/`result`/`done`, local
+  citation audit present) → replaying the same session returns "Session expired".
+- **Not verified:** a run with a real GGUF model, real DeepSeek calls, or a browser.
+
+### Follow-ups found during this phase (not done)
+- Local mode without a model still attempts NLI with `NLICitationJudge(None)`, which logs
+  `'NoneType' object is not callable` and yields `AUDIT_FAILED`. This is old behaviour.
+  The pipeline should skip NLI (or report "model unavailable") when no LLM is present.
+- `mcp_server/server.py` is still about 1060 lines of tool wrappers. Next step: split them
+  into `mcp_server/tools/*.py` by area (workflow, manuscript, citations, references, model).
+- Remaining phase 3/4 items from the roadmap below are unchanged.
+
+---
+
 ## 2026-11-04 — Architecture review, phase 1 fixes (correctness / performance / security / repo hygiene)
 
 Branch: `claude/sharp-einstein-dmbnvw` · Base commit: `078365e`
@@ -91,7 +189,7 @@ To restore any of them: `git show 078365e:<path> > <path>`.
   through the UI in a browser.
 
 ### Follow-up roadmap (not started)
-- **Phase 2 — service consolidation:** extract `ModelRegistry` (lazy load + lock,
+- ~~**Phase 2 — service consolidation:**~~ **Done — see the phase 2 entry above.** extract `ModelRegistry` (lazy load + lock,
   currently duplicated 3× across `backend/main.py` and `mcp_server/server.py`), an
   `LLMClient` interface (local llama / OpenAI-compatible; dedupe `_call_deepseek_api`
   and `_clean_json_text` in `llm_judge.py` / `nli_judge.py`; merge

@@ -4,6 +4,12 @@ except ImportError:
     Llama = None
 import json
 
+from naturalization_layer.discipline import DISCIPLINES, detect_discipline_by_keywords
+from naturalization_layer.llm_client import (
+    build_qwen_prompt, call_openai_compatible, clean_json_text, complete_local,
+    is_cloud_model, resolve_cloud_model,
+)
+
 def repair_json_string(json_str: str) -> str:
     # First, trim whitespace
     json_str = json_str.strip()
@@ -77,12 +83,7 @@ class StyleJudge:
         self.llm = llm_instance
         
     def detect_discipline(self, text_snippet: str, engine_type: str = "local", api_key: str = "", base_url: str = "") -> str:
-        # Map input engine type to API model names if needed
-        api_engine = engine_type
-        if "pro" in engine_type:
-            api_engine = "deepseek-v4-pro"
-        elif "flash" in engine_type:
-            api_engine = "deepseek-flash"
+        api_engine = resolve_cloud_model(engine_type)
 
         sys_prompt = """You are an academic classifier. Your task is to analyze the provided text snippet from a research paper or thesis and classify it into exactly one of the following academic discipline clusters:
 - SCI_TECH (Physical sciences, engineering, chemistry, physics, excluding automation)
@@ -99,35 +100,24 @@ You must return a JSON object containing exactly one key "discipline" with the c
         
         raw_text = ""
         try:
-            if api_engine in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
+            if is_cloud_model(api_engine):
                 raw_text = self._call_deepseek_api(api_engine, api_key, base_url, sys_prompt, user_prompt)
             else:
-                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. Write the final JSON object clearly.\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n"
-                response = self.llm(prompt, max_tokens=1024, stop=["<|im_end|>"])
-                raw_text = response["choices"][0]["text"].strip()
-                
+                prompt = build_qwen_prompt(
+                    sys_prompt + "\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. Write the final JSON object clearly.",
+                    user_prompt,
+                )
+                raw_text = complete_local(self.llm, prompt)
+
             _, cleaned_text = self._clean_json_text(raw_text)
             res = json.loads(cleaned_text)
             discipline = res.get("discipline", "UNIVERSAL").upper()
-            if discipline in ("SCI_TECH", "AUTOMATION_CONTROL", "AGRI_MED", "HUM_POL_ECON", "ARTS_SPORTS"):
+            if discipline in DISCIPLINES and discipline != "UNIVERSAL":
                 return discipline
         except Exception as e:
             print(f"Model discipline detection failed or returned invalid result: {e}. Falling back to keywords.")
-            
-        # Fallback based on simple keyword search (supports both Russian and English)
-        text_lower = text_snippet.lower()
-        if any(w in text_lower for w in ["управление", "робот", "автоматиз", "регулятор", "динамик", "control", "robot", "automat", "cybernetic", "feedback"]):
-            return "AUTOMATION_CONTROL"
-        if any(w in text_lower for w in ["биолог", "медиц", "клетк", "терап", "ген", "biolog", "medic", "cell", "gene", "patient", "clinical", "dna", "rna"]):
-            return "AGRI_MED"
-        if any(w in text_lower for w in ["физик", "хими", "сплав", "материал", "энерг", "physic", "chemic", "material", "alloy", "thermodynamic", "mechanic"]):
-            return "SCI_TECH"
-        if any(w in text_lower for w in ["эконом", "полити", "гуманитар", "истори", "обществ", "econom", "polit", "social", "humanit", "history", "societ"]):
-            return "HUM_POL_ECON"
-        if any(w in text_lower for w in ["искусств", "спорт", "культур", "музык", "art", "sport", "cultur", "music", "athlet", "paint"]):
-            return "ARTS_SPORTS"
-            
-        return "UNIVERSAL"
+
+        return detect_discipline_by_keywords(text_snippet)
 
     def diagnose_sentence(self, sentence: str, stats: dict = None, ppl: float = None, context_before: list = None, context_after: list = None, skill_rules: dict = None, engine_type: str = "local", api_key: str = "", base_url: str = "") -> dict:
         if stats is None:
@@ -196,13 +186,16 @@ You must return a JSON object containing exactly one key "discipline" with the c
 
         # Dispatch to appropriate engine
         try:
-            if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
+            if is_cloud_model(engine_type):
                 raw_text = self._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, context_str)
             else:
                 # Fallback to local
-                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). Keep your reasoning extremely concise (under 100 words) and focused. Write the final JSON object clearly.\n<|im_end|>\n<|im_start|>user\n{context_str}\n<|im_end|>\n<|im_start|>assistant\n<think>\n"
-                response = self.llm(prompt, max_tokens=1024, stop=["<|im_end|>"])
-                raw_text = response["choices"][0]["text"].strip()
+                prompt = build_qwen_prompt(
+                    sys_prompt + "\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). Keep your reasoning extremely concise (under 100 words) and focused. Write the final JSON object clearly.",
+                    context_str,
+                    assistant_prefix="<think>\n",
+                )
+                raw_text = complete_local(self.llm, prompt)
         except Exception as api_err:
             if engine_type == "local":
                 explanation_zh = f"由于本地模型推理异常（详情: {str(api_err)}），未能成功获取该句的学术写作风格透视。请稍后再试或切换到云端模型。"
@@ -287,78 +280,9 @@ You must return a JSON object containing exactly one key "discipline" with the c
             "safe_to_rewrite": False
         }
             
+    # Kept as methods so tests (and callers) can patch them per instance.
     def _call_deepseek_api(self, model: str, api_key: str, base_url: str, sys_prompt: str, user_prompt: str) -> str:
-        import urllib.request
-        import urllib.error
-        
-        if not base_url:
-            base_url = "https://api.deepseek.com/v1"
-            
-        url = f"{base_url.rstrip('/')}/chat/completions"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "response_format": {"type": "json_object"}
-        }
-        req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                res_body = response.read().decode("utf-8")
-                res_json = json.loads(res_body)
-                content = res_json["choices"][0]["message"].get("content", "")
-                reasoning = res_json["choices"][0]["message"].get("reasoning_content", "")
-                if reasoning:
-                    return f"<think>{reasoning}</think>\n{content}"
-                return content
-        except Exception as e:
-            # Raise the exception directly so the caller can handle API errors properly
-            raise e
-            
-    def _clean_json_text(self, text: str) -> tuple[str, str]:
-        text = text.strip()
-        think_content = ""
-        import re
-        
-        # Extract <think> content if present
-        think_match = re.search(r'<think>(.*?)</think>', text, flags=re.DOTALL)
-        if think_match:
-            think_content = think_match.group(1).strip()
-            text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-        else:
-            # Maybe it didn't close the think tag?
-            if text.startswith("<think>"):
-                parts = text.split("</think>")
-                if len(parts) == 1:
-                    # Unclosed think tag
-                    think_content = text[7:].strip()
-                    text = "{}" # Return empty JSON to trigger parse error or empty issues
-                else:
-                    think_content = parts[0][7:].strip()
-                    text = parts[1].strip()
-            elif "</think>" in text:
-                parts = text.split("</think>", 1)
-                think_content = parts[0].strip()
-                text = parts[1].strip()
+        return call_openai_compatible(model, api_key, base_url, sys_prompt, user_prompt)
 
-        if text.startswith("```"):
-            lines = text.split("\n")
-            if lines[0].startswith("```json") or lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            text = "\n".join(lines).strip()
-            
-        # Sometimes Qwen prefixes with "Вот JSON:"
-        json_start = text.find("{")
-        json_end = text.rfind("}")
-        if json_start != -1 and json_end != -1 and json_end > json_start:
-            text = text[json_start:json_end+1]
-            
-        return think_content, text
+    def _clean_json_text(self, text: str) -> tuple[str, str]:
+        return clean_json_text(text)

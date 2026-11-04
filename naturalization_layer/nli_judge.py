@@ -3,8 +3,12 @@ try:
 except ImportError:
     Llama = None
 import json
-import urllib.request
 import re
+
+from naturalization_layer.llm_client import (
+    build_qwen_prompt, call_openai_compatible, clean_json_text, complete_local,
+    is_cloud_model, resolve_cloud_model,
+)
 
 class NLICitationJudge:
     def __init__(self, llm_instance: Llama):
@@ -27,11 +31,7 @@ class NLICitationJudge:
                 "evidence_snippet": ""
             }
 
-        api_engine = engine_type
-        if "pro" in engine_type:
-            api_engine = "deepseek-v4-pro"
-        elif "flash" in engine_type:
-            api_engine = "deepseek-flash"
+        api_engine = resolve_cloud_model(engine_type)
 
         sys_prompt = """You are an academic citation auditor. Your task is to verify if a given claim (sentence) from a research paper is logically supported by the provided snippets retrieved from the cited reference.
 You must classify the relationship into exactly one of three categories:
@@ -55,13 +55,15 @@ Retrieved Reference Snippets:
 
         raw_text = ""
         try:
-            if api_engine in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
+            if is_cloud_model(api_engine):
                 raw_text = self._call_deepseek_api(api_engine, api_key, base_url, sys_prompt, user_prompt)
             else:
                 # Local GGUF mode
-                prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. Write the final JSON object clearly.\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n"
-                response = self.llm(prompt, max_tokens=1024, stop=["<|im_end|>"])
-                raw_text = response["choices"][0]["text"].strip()
+                prompt = build_qwen_prompt(
+                    sys_prompt + "\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). The reasoning can be detailed. Write the final JSON object clearly.",
+                    user_prompt,
+                )
+                raw_text = complete_local(self.llm, prompt)
 
             think_content, cleaned_text = self._clean_json_text(raw_text)
             res = json.loads(cleaned_text)
@@ -109,64 +111,9 @@ Retrieved Reference Snippets:
                 "evidence_snippet": ""
             }
 
+    # Kept as methods so tests (and callers) can patch them per instance.
     def _call_deepseek_api(self, model: str, api_key: str, base_url: str, sys_prompt: str, user_prompt: str) -> str:
-        # Resolve base URL
-        url = "https://api.deepseek.com/v1/chat/completions"
-        if base_url:
-            url = base_url.rstrip("/") + "/chat/completions"
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
-        }
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            "response_format": {"type": "json_object"}
-        }
-        req = urllib.request.Request(url, data=json.dumps(data).encode("utf-8"), headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=30) as response:
-            res_body = response.read().decode("utf-8")
-            res_json = json.loads(res_body)
-            content = res_json["choices"][0]["message"].get("content", "")
-            reasoning = res_json["choices"][0]["message"].get("reasoning_content", "")
-            if reasoning:
-                return f"<think>{reasoning}</think>\n{content}"
-            return content
+        return call_openai_compatible(model, api_key, base_url, sys_prompt, user_prompt)
 
     def _clean_json_text(self, text: str) -> tuple[str, str]:
-        text = text.strip()
-        think_content = ""
-        
-        # Extract <think> content if present
-        think_match = re.search(r'<think>(.*?)</think>', text, flags=re.DOTALL)
-        if think_match:
-            think_content = think_match.group(1).strip()
-            text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
-        else:
-            if text.startswith("<think>"):
-                parts = text.split("</think>")
-                if len(parts) == 1:
-                    think_content = text[7:].strip()
-                    text = "{}"
-                else:
-                    think_content = parts[0][7:].strip()
-                    text = parts[1].strip()
-
-        if text.startswith("```"):
-            lines = text.split("\n")
-            if lines[0].startswith("```json") or lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip() == "```":
-                lines = lines[:-1]
-            text = "\n".join(lines).strip()
-            
-        json_start = text.find("{")
-        json_end = text.rfind("}")
-        if json_start != -1 and json_end != -1 and json_end > json_start:
-            text = text[json_start:json_end+1]
-            
-        return think_content, text
+        return clean_json_text(text)

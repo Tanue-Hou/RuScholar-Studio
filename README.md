@@ -207,6 +207,9 @@ cp .env.example .env
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | 物理 PPL 探针推理时的 GPU 卸载层数（-1 表示最大，0 表示纯 CPU）。 |
 | `RUSCHOLAR_HOST` | `127.0.0.1` | 后端服务器绑定的 host。默认仅本机可访问；API 无鉴权，设为 `0.0.0.0` 前请确认网络环境可信。 |
 | `RUSCHOLAR_PORT` | `8000` | 后端服务器绑定的 port。 |
+| `RUSCHOLAR_SESSION_TTL` | `7200` | 会话（待分析文本、已上传文献）闲置多少秒后自动清理。 |
+| `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | 允许跨域的来源（逗号分隔），仅 Vite 开发服务器需要。 |
+| `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | 云端 Judge 请求超时（秒）。 |
 
 ---
 
@@ -427,6 +430,9 @@ cp .env.example .env
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | Слои модели на GPU (-1 для максимума, 0 для CPU). |
 | `RUSCHOLAR_HOST` | `127.0.0.1` | Хост для запуска backend API. По умолчанию доступен только локально; API без аутентификации — используйте `0.0.0.0` только в доверенной сети. |
 | `RUSCHOLAR_PORT` | `8000` | Порт для запуска backend API. |
+| `RUSCHOLAR_SESSION_TTL` | `7200` | Через сколько секунд простоя удаляются сессии (тексты на анализ, загруженные источники). |
+| `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Разрешённые CORS-источники (через запятую); нужны только для dev-сервера Vite. |
+| `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | Таймаут запросов к облачному judge (сек.). |
 
 ---
 
@@ -650,6 +656,9 @@ cp .env.example .env
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | Number of model layers offloaded to GPU (-1 for max, 0 for CPU). |
 | `RUSCHOLAR_HOST` | `127.0.0.1` | Binding host for backend API. Loopback-only by default; the API has no authentication, so only use `0.0.0.0` on a trusted network. |
 | `RUSCHOLAR_PORT` | `8000` | Binding port for backend API. |
+| `RUSCHOLAR_SESSION_TTL` | `7200` | Idle seconds after which sessions (pending analyses, uploaded references) are dropped. |
+| `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed CORS origins (comma-separated); only the Vite dev server needs them. |
+| `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | Timeout for cloud judge requests (seconds). |
 
 ---
 
