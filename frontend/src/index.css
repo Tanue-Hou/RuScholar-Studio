@@ -4,15 +4,12 @@
  * headline tracking, pill buttons, segmented tabs, translucent header.
  * Colour: one interactive blue; status colours; six issue-type colours from a
  * validated categorical palette, always paired with a text label.
- * Fonts: system stack (SF Pro / PingFang on Apple devices); bundled Inter,
- * Source Serif 4 and JetBrains Mono as offline fallbacks (no CDN).
+ * Fonts: Apple system fonts only — SF Pro (Latin + Cyrillic), PingFang SC
+ * (Chinese) and SF Mono, reached through -apple-system / ui-monospace exactly
+ * as apple.com does. Apple's font licence forbids bundling or redistributing
+ * these files, so nothing is shipped; other platforms fall back to their own
+ * system UI font (Segoe UI / Microsoft YaHei on Windows).
  */
-@import '@fontsource/inter/400.css';
-@import '@fontsource/inter/500.css';
-@import '@fontsource/inter/600.css';
-@import '@fontsource/source-serif-4/400.css';
-@import '@fontsource/source-serif-4/400-italic.css';
-@import '@fontsource/jetbrains-mono/400.css';
 
 :root {
   color-scheme: dark;
@@ -58,9 +55,10 @@
   --mark-pending: #2c2c2e;
   --selection: rgba(255, 255, 255, 0.08);
 
-  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'PingFang SC', 'Inter', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
-  --font-read: ui-serif, 'New York', 'Source Serif 4', 'Songti SC', 'Noto Serif CJK SC', Georgia, serif;
-  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'SF Pro', 'PingFang SC', 'Helvetica Neue', 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  /* Manuscript text uses SF Pro too, as apple.com does for body copy. */
+  --font-read: var(--font-ui);
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
 
   --t-meta: 0.75rem;     /* 12 */
   --t-small: 0.8125rem;  /* 13 */
@@ -323,7 +321,8 @@ a { color: inherit; }
   padding: 28px 0 40px;
   font-family: var(--font-read);
   font-size: var(--t-read);
-  line-height: 1.85;
+  line-height: 1.8;
+  letter-spacing: -0.012em;
   color: var(--text);
   overflow-wrap: break-word;
   hyphens: auto;
@@ -356,7 +355,7 @@ a { color: inherit; }
 /* ---------- Discipline ---------- */
 
 .discipline-name { font-size: var(--t-title); font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
-.discipline-ru { font-family: var(--font-read); font-style: italic; color: var(--text-2); font-size: var(--t-body); margin-top: 2px; }
+.discipline-ru { font-family: var(--font-read); color: var(--text-2); font-size: var(--t-body); margin-top: 2px; }
 .threshold-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
 .threshold-row div { padding: 10px 12px; background: var(--inset); border-radius: var(--r-sm); }
 .threshold-row dt { font-size: var(--t-meta); color: var(--text-3); }
@@ -462,7 +461,7 @@ a { color: inherit; }
 .audit-ref { font-size: var(--t-small); font-weight: 500; overflow-wrap: anywhere; }
 .audit-meta { font-size: var(--t-meta); color: var(--text-3); margin-top: 2px; }
 .audit-body { font-size: var(--t-small); color: var(--text-2); margin-top: 6px; }
-.evidence { margin-top: 6px; padding: 8px 10px; border-left: 2px solid var(--line-3); font-family: var(--font-read); font-style: italic; font-size: var(--t-small); color: var(--text-2); }
+.evidence { margin-top: 6px; padding: 8px 10px; border-left: 2px solid var(--line-3); font-family: var(--font-read); font-size: var(--t-small); color: var(--text-2); }
 
 /* ---------- Stream ---------- */
 

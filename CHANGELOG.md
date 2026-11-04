@@ -14,10 +14,12 @@ up the work without re-reading the whole diff.
 - **去掉 AI 味：** 删除青色霓虹发光、渐变进度条、玻璃模糊、Sparkles 图标、emoji、到处都有的「(English)」括注，以及「深度神经网络质检计算中」这类夸张文案。
 - **苹果式质感：**
   - 画布为纯黑（深色）/ `#f5f5f7`（浅色），卡片为 18px 大圆角；
-  - 系统字体（macOS / iOS 上为 SF Pro 与苹方），标题半粗、字距收紧，关键数字用大号；
-  - 主按钮为胶囊形蓝色，筛选用分段控件，顶栏半透明；
-  - 手稿正文用衬线体（Safari 中为 New York）。
-- **字体本地化：** 不再请求 Google Fonts。Inter、Source Serif 4、JetBrains Mono 打包进构建，作为非苹果设备上的回退字体。
+  - 标题半粗、字距收紧，关键数字用大号；
+  - 主按钮为胶囊形蓝色，筛选用分段控件，顶栏半透明。
+- **字体全部使用苹果官方系统字体：** 界面和手稿正文都是 SF Pro（含西里尔字母），中文为苹方，等宽为 SF Mono，与 apple.com 一样通过 `-apple-system` / `ui-monospace` 调用。
+  - 苹果字体授权不允许打包或再分发，而本仓库是公开的，所以构建里不包含任何字体文件。
+  - 同时不再请求 Google Fonts，也移除了 `@fontsource` 的 Inter、Source Serif 4、JetBrains Mono 三个依赖。
+  - 非苹果设备回退到各自的系统界面字体（Windows 上为 Segoe UI 与微软雅黑）。
 
 ### 问题分色（新增）
 | 问题 | 颜色 | 手稿下划线 |
@@ -53,6 +55,7 @@ up the work without re-reading the whole diff.
 ### 验证
 - 后端 112 passed / 1 deselected；前端 lint、test:api 6/6、test:config 8/8、构建通过。
 - Playwright 渲染深色、浅色、概览、完整右栏和手机端参考图：无控制台错误，无横向溢出。
+- 云端容器是 Linux，没有苹果字体，截图中的 SF Pro 被 Inter 代替；真实的苹果字体效果需要在 Mac 上查看。
 - 参考图与评审记录见 `collab/reviews/2026-11-04-RS-0018-ui-refine.md`。
 - **未验证：** 真实 Qwen 推理下的完整流程、真实云端、Windows。
 
