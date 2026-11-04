@@ -46,3 +46,7 @@ frontend/dist/
 # Runtime exports
 exports/
 reports/
+
+# Python packaging (pip install -e .)
+*.egg-info/
+build/

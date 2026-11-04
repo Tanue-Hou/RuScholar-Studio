@@ -61,8 +61,8 @@ echo ">>> [Stage 5/5] Running verification test suite with 8B model..."
 echo ""
 echo "=========================================================="
 echo " 🎉 8B Model Upgrade & Verification Completed! "
-echo " Restarting RuScholar Studio Backend on Port 6666... "
+echo " Restarting RuScholar Studio Backend on Port 8000... "
 echo "=========================================================="
 
-export RUSCHOLAR_PORT=6666
+export RUSCHOLAR_PORT=8000
 exec "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/backend/main.py"

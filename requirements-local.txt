@@ -1,0 +1,2 @@
+# Native GGUF runtime; also used by the package's optional local extra.
+llama-cpp-python>=0.2.75,<0.4

@@ -1,3 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ruscholar-studio"
+dynamic = ["version", "dependencies", "optional-dependencies"]
+description = "Privacy-first audit and style naturalization workspace for Russian academic writing."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[project.scripts]
+ruscholar-web = "backend.main:run"
+ruscholar-mcp = "mcp_server.server:run"
+
+[tool.setuptools.packages.find]
+include = ["backend", "backend.*", "mcp_server", "mcp_server.*", "services", "services.*", "naturalization_layer", "naturalization_layer.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+naturalization_layer = ["rules/*.json", "calibration/*.json"]
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
+dependencies = { file = ["requirements-core.txt"] }
+optional-dependencies.local = { file = ["requirements-local.txt"] }
+optional-dependencies.dev = { file = ["requirements-test.txt"] }
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

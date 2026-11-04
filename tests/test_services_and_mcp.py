@@ -92,7 +92,7 @@ def test_mcp_retrieve_evidence():
 
     asyncio.run(run())
 
-@patch("mcp_server.server.get_engines")
+@patch("mcp_server.app.get_engines")
 def test_mcp_suggest_revision(mock_get_engines):
     import asyncio
     from mcp_server.server import suggest_revision
@@ -344,7 +344,7 @@ def test_mcp_e2e_references_flow():
         
         # 3. Perform citation audit on a text that cites [smith2020]
         # We mock get_engines to avoid loading the real model if not needed
-        with patch("mcp_server.server.get_engines") as mock_get_engines:
+        with patch("mcp_server.app.get_engines") as mock_get_engines:
             mock_engine = MagicMock()
             mock_judge = MagicMock()
             mock_cit_judge = MagicMock()
@@ -437,7 +437,7 @@ def test_mcp_route_workflow():
         
     asyncio.run(run())
 
-@patch("mcp_server.server.get_engines")
+@patch("mcp_server.app.get_engines")
 def test_mcp_map_vak_specialty(mock_get_engines):
     import asyncio
     from mcp_server.server import thesis_map_vak_specialty
@@ -456,7 +456,7 @@ def test_mcp_map_vak_specialty(mock_get_engines):
         
     asyncio.run(run())
 
-@patch("mcp_server.server.get_engines")
+@patch("mcp_server.app.get_engines")
 def test_mcp_granular_citation_tools(mock_get_engines):
     import asyncio
     from mcp_server.server import (
@@ -507,7 +507,7 @@ def test_mcp_granular_citation_tools(mock_get_engines):
         
     asyncio.run(run())
 
-@patch("mcp_server.server.get_engines")
+@patch("mcp_server.app.get_engines")
 def test_mcp_audit_vak_gost_compliance(mock_get_engines):
     import asyncio
     from mcp_server.server import thesis_audit_vak_gost_compliance

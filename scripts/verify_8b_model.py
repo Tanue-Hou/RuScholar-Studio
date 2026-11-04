@@ -2,7 +2,7 @@ import sys
 import os
 import time
 
-# Add project root to sys.path
+# Dev script: make the project root importable when run as `python scripts/<name>.py`.
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 

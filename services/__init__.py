@@ -1,1 +1,1 @@
-"""Shared service layer used by the Web UI and MCP tools."""
+"""Shared service layer; services.settings owns runtime configuration loading."""

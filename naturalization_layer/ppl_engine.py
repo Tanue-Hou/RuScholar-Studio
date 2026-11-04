@@ -6,6 +6,34 @@ import math
 import os
 from typing import Optional
 
+import numpy as np
+
+
+def sequence_nll(scores, tokens: list[int], n_tokens: int) -> float:
+    """
+    Total negative log-likelihood of tokens[1:n_tokens] given the logits rows
+    scores[0:n_tokens-1] (row i predicts token i+1).
+
+    Vectorised with numpy: one log-sum-exp per row instead of a Python loop
+    over the whole vocabulary (~150k entries for Qwen3).
+    """
+    n_pred = n_tokens - 1
+    nll = 0.0
+    # Bound scratch space for Qwen's ~150k vocabulary. Expanding every context
+    # row to float64 at once can require several GB beyond the GGUF model.
+    for start in range(0, n_pred, 16):
+        end = min(start + 16, n_pred)
+        logits = np.array(scores[start:end], dtype=np.float64, copy=True)
+        targets = np.asarray(tokens[start + 1:end + 1], dtype=np.int64)
+        target_logits = logits[np.arange(end - start), targets]
+        row_max = logits.max(axis=1)
+        logits -= row_max[:, None]
+        np.exp(logits, out=logits)
+        log_norm = row_max + np.log(logits.sum(axis=1))
+        nll += float(np.sum(log_norm - target_logits))
+    return nll
+
+
 class PPLEngine:
     def __init__(self, model_path: str, n_gpu_layers: Optional[int] = None):
         if Llama is None:
@@ -21,11 +49,11 @@ class PPLEngine:
             if n_gpu_layers == 0:
                 raise
             self.llm = Llama(model_path=model_path, n_gpu_layers=0, n_ctx=3072, logits_all=True, verbose=False)
-        
+
     def evaluate_sentence_ppl(
-        self, 
-        sentence: str, 
-        early_exit_tokens: int = 0, 
+        self,
+        sentence: str,
+        early_exit_tokens: int = 0,
         early_exit_lower: float = 15.0,
         early_exit_upper: float = 80.0
     ) -> tuple[float, bool]:
@@ -37,44 +65,22 @@ class PPLEngine:
         tokens = self.llm.tokenize(sentence.encode("utf-8"), add_bos=True)
         if len(tokens) <= 1:
             return 0.0, False
-            
+
         # 1. Stage 1: Check prefix PPL if early exit is configured and sentence is long enough
         if early_exit_tokens > 0 and len(tokens) > early_exit_tokens + 1:
             k = early_exit_tokens + 1
             self.llm.reset()
             self.llm.eval(tokens[:k])
-            
-            # Calculate prefix NLL
-            nll = 0.0
-            for i in range(k - 1):
-                logits = self.llm._scores[i, :]
-                max_logit = max(logits)
-                exp_sum = sum(math.exp(l - max_logit) for l in logits)
-                log_probs = [l - max_logit - math.log(exp_sum) for l in logits]
-                
-                target_token = tokens[i + 1]
-                nll -= log_probs[target_token]
-                
-            prefix_ppl = math.exp(nll / (k - 1))
+
+            prefix_ppl = math.exp(sequence_nll(self.llm._scores, tokens, k) / (k - 1))
             # Early exit ONLY if PPL is in the safe middle range.
             # Very low (< lower) = AI generated. Very high (> upper) = Bad translation.
             if early_exit_lower <= prefix_ppl <= early_exit_upper:
                 return prefix_ppl, True
-                
+
         # 2. Stage 2: Full evaluation (either early exit was disabled, sentence too short, or prefix was not natural enough)
         self.llm.reset()
         self.llm.eval(tokens)
-        
-        # Calculate full NLL
-        nll = 0.0
-        for i in range(len(tokens) - 1):
-            logits = self.llm._scores[i, :]
-            # Simple softmax log prob for the next token
-            max_logit = max(logits)
-            exp_sum = sum(math.exp(l - max_logit) for l in logits)
-            log_probs = [l - max_logit - math.log(exp_sum) for l in logits]
-            
-            target_token = tokens[i + 1]
-            nll -= log_probs[target_token]
-            
-        return math.exp(nll / (len(tokens) - 1)), False
+
+        n = len(tokens)
+        return math.exp(sequence_nll(self.llm._scores, tokens, n) / (n - 1)), False

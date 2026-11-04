@@ -2,9 +2,8 @@ import os
 import pytest
 from unittest.mock import MagicMock
 from naturalization_layer.llm_judge import StyleJudge
-from llama_cpp import Llama
 
-MODEL_PATH = "models/Qwen3-4B-Q5_K_M.gguf"
+from services.shared_state import MODEL_PATH
 
 def test_style_judge_mock():
     mock_llm = MagicMock()
@@ -22,8 +21,10 @@ def test_style_judge_mock():
     assert res["safe_to_rewrite"] is True
     assert res["issues"][0]["issue_type"] == "ai_generated_suspicion"
 
+@pytest.mark.local_model
 @pytest.mark.skipif(not os.path.exists(MODEL_PATH), reason="Real model not found")
 def test_style_judge_real():
+    Llama = pytest.importorskip("llama_cpp").Llama
     llm = Llama(model_path=MODEL_PATH, n_gpu_layers=-1, n_ctx=2048, verbose=False)
     judge = StyleJudge(llm)
     

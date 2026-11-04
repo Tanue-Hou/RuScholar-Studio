@@ -1,10 +1,19 @@
 # RuScholar Studio 🎓
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
-[![Node Version](https://img.shields.io/badge/node-18%2B-green)](https://nodejs.org/)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![Node Version](https://img.shields.io/badge/node-20.19%2B-green)](https://nodejs.org/)
 
 **RuScholar Studio** (formerly *PhD Thesis Butler*) is a professional-grade, privacy-first academic writing quality audit and style naturalization workspace designed specifically for Russian dissertations, manuscripts, and research papers. It provides a hybrid diagnostic workflow that runs locally or in the cloud.
+
+---
+
+### 📚 项目文档与协作 / Documentation & Collaboration
+
+- AI 助手（Codex / Claude / Antigravity）入口规则：[`AGENTS.md`](AGENTS.md)
+- 文档中心（需求 → 设计 → 计划 → 开发 → 测试 → 发布）：[`docs/README.md`](docs/README.md)
+- 任务看板与协作记录：[`collab/board.md`](collab/board.md)
+- 变更记录：[`CHANGELOG.md`](CHANGELOG.md)
 
 ---
 
@@ -22,7 +31,7 @@
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!IMPORTANT]
-> Web UI 会实时高亮论文正文中的风格、句法和参考文献证据链异常（黄色表示警告，红色表示高风险）。这些标记是为作者提供**修改建议与证据链线索**，绝非对学术不端或 AI 代写的自动裁决。
+> Web UI 以页边批注的形式标出正文中的风格、句法和参考文献证据链问题：需要修改的句子带细下划线和编号，点开编号即可看到原因、指标、改写建议与引用核验结果（截图使用示例数据）。这些标记是为作者提供**修改建议与证据链线索**，绝非对学术不端或 AI 代写的自动裁决。
 
 ---
 
@@ -35,7 +44,7 @@
 *   **论文专属工作流路由 (Workflow Router)**：自动识别用户所处的写作、大纲规划、文献调研、或证据审计等不同学术场景，推荐最适合的工具链执行计划（Tool Execution Plan），实现从单兵工具到协议流程的进化。
 *   **ВАК 学科专业目录精准映射 (VAK Specialty Mapping)**：将论文选题或研究方向与俄罗斯新版 ВАК 专业代码（如 2.3.1 系统分析、1.2.2 数学建模等）进行深度匹配，提供专业Passport范围描述并自动警告越界内容。
 *   **细粒度学术论点与证据链 NLI 审计**：一键抽取文章中的核心学术断言，评估其文献支撑必要性，并利用自然语言推理（NLI）校验论点与引文片段之间的逻辑关系（SUPPORTED / CONTRADICTED / NEUTRAL）。
-*   **本地隐私绝对保障**：原生支持本地 GGUF 大模型（`Qwen3-4B`）、本地物理困惑度（PPL）探针、本地 PDF/BibTeX 文献检索，未发表的学术手稿完全离线处理，确保数据不泄露。
+*   **本地隐私绝对保障**：原生支持本地 GGUF 大模型（`Qwen3-8B`）、本地物理困惑度（PPL）探针、本地 PDF/BibTeX 文献检索，未发表的学术手稿完全离线处理，确保数据不泄露。
 *   **LLM-as-NLI 证据链验证**：利用自然语言推理（Natural Language Inference）模型，对正文中的 claim 论点与检索到的引文 snippet 进行蕴含、矛盾、无关的三分类逻辑判定。
 *   **FastMCP 协议原生支持**：内嵌 stdio JSON-RPC 通道，允许 AI 客户端（如 Claude Code, Cursor, Claude Desktop）直接调用工具，实现一键引用校验和报告导出。
 *   **云端与本地灵活协同**：支持纯本地模式（离线保护）、混合模式（本地 PPL 估算 + 云端 DeepSeek 协同判定）以及纯云端模式。
@@ -75,10 +84,10 @@ RuScholar Studio 是在 **PhD Thesis Butler** (`phd-thesis-butler`) 自定义 AI
 
 | 资源 | 最低配置 | 推荐配置 |
 | :--- | :--- | :--- |
-| **Python** | 3.9+ | 3.10+ |
-| **Node.js** | 18+ | 20+ |
+| **Python** | 3.10+ | 3.12 |
+| **Node.js** | 20.19+ / 22.12+ | 22+ |
 | **RAM 内存** | 8 GB（适用于纯云端模式） | 16 GB 以上（适用于本地 GGUF 推理） |
-| **磁盘空间** | 500 MB（源码与依赖包） | 4 GB（含 2.7 GB 的本地模型文件） |
+| **磁盘空间** | 500 MB（源码与依赖包） | 8 GB（含约 5.9 GB 的本地模型文件） |
 | **操作系统** | macOS / Windows / Linux | macOS Apple Silicon（可使用 Metal 硬件加速） |
 
 ---
@@ -96,7 +105,7 @@ cd RuScholar-Studio
 chmod +x setup.sh
 ./setup.sh
 ```
-*   如果要在安装时自动下载 2.7 GB 本地模型：`DOWNLOAD_MODEL=1 ./setup.sh`
+*   如果要在安装时自动下载约 5.9 GB 本地模型：`DOWNLOAD_MODEL=1 ./setup.sh`
 *   Apple Silicon 用户如果想编译支持 Metal 硬件加速：`INSTALL_LLAMA_METAL=1 ./setup.sh`
 
 **Windows (PowerShell)**:
@@ -107,9 +116,9 @@ chmod +x setup.sh
 
 #### 2. 本地大模型下载
 
-若需使用 `local` 或 `hybrid` 诊断模式，系统依赖 **Qwen3-4B-Q5_K_M GGUF** 大模型。该模型默认放置在：
+若需使用 `local` 或 `hybrid` 诊断模式，系统依赖 **Qwen3-8B-Q5_K_M GGUF** 大模型。该模型默认放置在：
 ```
-models/Qwen3-4B-Q5_K_M.gguf
+models/Qwen3-8B-Q5_K_M.gguf
 ```
 
 您可以通过命令行手动触发高速下载：
@@ -124,8 +133,8 @@ python -c "from naturalization_layer.model_downloader import download_model; fro
 运行单端口一体化服务器（FastAPI 会自动托管构建完成的 React 静态页面）：
 
 ```bash
-source .venv/bin/activate
-python backend/main.py
+source "$HOME/.venvs/ruscholar/bin/activate"
+ruscholar-web   # 等价于 python -m backend.main
 ```
 在浏览器中打开 **`http://localhost:8000`**。
 
@@ -133,8 +142,8 @@ python backend/main.py
 若要对前端 React 代码进行修改和调试：
 ```bash
 # 终端 1: 启动后端 API 服务
-source .venv/bin/activate
-python backend/main.py
+source "$HOME/.venvs/ruscholar/bin/activate"
+RUSCHOLAR_RELOAD=1 ruscholar-web   # 后端自动重载
 
 # 终端 2: 启动前端 Vite 调试服务
 cd frontend
@@ -192,7 +201,7 @@ claude mcp add ruscholar-studio python -m mcp_server.server --cwd "<YOUR_CLONE_P
 
 ### ⚙️ 配置项说明
 
-在项目根目录下复制 `.env.example` 并重命名为 `.env`：
+在项目根目录下复制 `.env.example` 并重命名为 `.env`（启动时会自动读取，已存在的环境变量优先）：
 ```bash
 cp .env.example .env
 ```
@@ -201,12 +210,16 @@ cp .env.example .env
 | :--- | :--- | :--- |
 | `DEEPSEEK_API_KEY` | *(空)* | 云端 Judge 推理时所需的 API Key。 |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | 兼容 OpenAI 格式的云端大模型接口地址。 |
-| `RUSCHOLAR_MODEL_PATH` | `models/Qwen3-4B-Q5_K_M.gguf` | 本地 GGUF 大模型文件的物理存放路径。 |
+| `RUSCHOLAR_MODEL_PATH` | *(空，自动查找)* | 本地 GGUF 模型路径；留空时依次查找 `models/` 与 PHD-Scholar 的 `data/models/`（先 8B 后 4B）。相对路径按项目根目录解析。 |
 | `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/...` | 自动下载本地大模型时所用的 ModelScope 节点 URL。 |
 | `RUSCHOLAR_RULES_PATH` | `naturalization_layer/rules/polishing_rules_v5.json` | 学科写作规范及学术模板数据库路径。 |
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | 物理 PPL 探针推理时的 GPU 卸载层数（-1 表示最大，0 表示纯 CPU）。 |
-| `RUSCHOLAR_HOST` | `0.0.0.0` | 后端服务器绑定的 host。 |
+| `RUSCHOLAR_HOST` | `127.0.0.1` | 后端服务器绑定的 host。默认仅本机可访问；API 无鉴权，设为 `0.0.0.0` 前请确认网络环境可信。 |
 | `RUSCHOLAR_PORT` | `8000` | 后端服务器绑定的 port。 |
+| `RUSCHOLAR_SESSION_TTL` | `7200` | 会话（待分析文本、已上传文献）闲置多少秒后自动清理。 |
+| `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | 允许跨域的来源（逗号分隔），仅 Vite 开发服务器需要。 |
+| `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | 云端 Judge 请求超时（秒）。 |
+| `RUSCHOLAR_MAX_UPLOAD_MB` | `50` | 单个上传文件（手稿或参考文献）的大小上限（MB）。 |
 
 ---
 
@@ -242,7 +255,7 @@ RuScholar Studio 采用 **MIT License** 开源。
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!NOTE]
-> Web UI подсвечивает стилистические аномалии и проблемы с источниками в реальном времени. Предложения кодируются цветом (желтый для предупреждения, красный для высокого риска) на основе нарушения правил диссертационного письма, физического показателя перплексивности (PPL) и проверки цитирования через NLI. Данные отчеты служат **помощником для рецензирования**, а не автоматическим вердиктом о плагиате или использовании ИИ.
+> Web UI подсвечивает стилистические аномалии и проблемы с источниками в реальном времени. Проблемные предложения помечаются тонким подчёркиванием и номером примечания, как редакторские пометки на полях; по номеру открываются причина, метрики, вариант правки и результат проверки цитирования через NLI (на снимке — демонстрационные данные). Данные отчеты служат **помощником для рецензирования**, а не автоматическим вердиктом о плагиате или использовании ИИ.
 
 ---
 
@@ -255,7 +268,7 @@ RuScholar Studio 采用 **MIT License** 开源。
 *   **Маршрутизация рабочих процессов диссертации (Workflow Router)**: Автоматическое определение этапа работы (планирование, написание, поиск литературы или аудит доказательств) и генерация оптимального плана выполнения инструментов (Tool Execution Plan).
 *   **Интеллектуальное сопоставление со специальностями ВАК**: Точное сопоставление темы исследования с новой номенклатурой специальностей ВАК РФ (например, 2.3.1 Системный анализ, 1.2.2 Математическое моделирование) с предупреждениями о выходе за рамки паспорта специальности.
 *   **Гранулярный аудит научных утверждений на базе NLI**: Автоматическое извлечение ключевых научных утверждений, оценка необходимости их подтверждения литературой и проверка логического соответствия утверждений и найденных доказательств с помощью моделей NLI (SUPPORTED / CONTRADICTED / NEUTRAL).
-*   **Конфиденциальность рукописей**: Локальный запуск GGUF-модели (`Qwen3-4B`), офлайн-оценка физической перплексивности (PPL) и локальный поиск по базам PDF/BibTeX гарантируют сохранность ваших данных на вашем ПК.
+*   **Конфиденциальность рукописей**: Локальный запуск GGUF-модели (`Qwen3-8B`), офлайн-оценка физической перплексивности (PPL) и локальный поиск по базам PDF/BibTeX гарантируют сохранность ваших данных на вашем ПК.
 *   **Аудит цитирования через NLI-судью**: Автоматически сопоставляет утверждения в тексте статьи с абстрактами источников, классифицируя логическую связь как *Entailment (Подтверждается)*, *Contradiction (Противоречит)* или *Neutral (Недостаточно данных)*.
 *   **Поддержка протокола FastMCP**: Встроенный stdio JSON-RPC демон позволяет AI-агентам (таким как Claude Code, Cursor, Claude Desktop) напрямую работать с вашей локальной библиотекой и аудировать рукопись.
 *   **Гибридная архитектура**: Поддерживается полностью локальный режим, гибридный режим (локальный расчет PPL + облачный анализ через DeepSeek) и чисто облачный режим.
@@ -295,10 +308,10 @@ RuScholar Studio представляет собой визуальную сре
 
 | Ресурс | Минимум | Рекомендуется |
 | :--- | :--- | :--- |
-| **Python** | 3.9+ | 3.10+ |
-| **Node.js** | 18+ | 20+ |
+| **Python** | 3.10+ | 3.12 |
+| **Node.js** | 20.19+ / 22.12+ | 22+ |
 | **RAM** | 8 GB для cloud-only режима | 16 GB+ для локальной модели |
-| **Диск** | 500 MB для исходного кода и зависимостей | 4 GB с учетом 2.7 GB GGUF-модели |
+| **Диск** | 500 MB для исходного кода и зависимостей | 8 GB с учетом ~5.9 GB GGUF-модели |
 | **ОС** | macOS / Windows / Linux | macOS Apple Silicon (с ускорением Metal) |
 
 ---
@@ -327,9 +340,9 @@ chmod +x setup.sh
 
 #### 2. Локальная модель
 
-Для использования режимов `local` или `hybrid` офлайн требуется локальная модель **Qwen3-4B-Q5_K_M GGUF** (около 2.7 GB). По умолчанию она должна находиться по пути:
+Для использования режимов `local` или `hybrid` офлайн требуется локальная модель **Qwen3-8B-Q5_K_M GGUF** (около 5.9 GB). По умолчанию она должна находиться по пути:
 ```
-models/Qwen3-4B-Q5_K_M.gguf
+models/Qwen3-8B-Q5_K_M.gguf
 ```
 
 Загрузка через CLI:
@@ -344,8 +357,8 @@ python -c "from naturalization_layer.model_downloader import download_model; fro
 Запуск единого backend-сервера (FastAPI автоматически раздает сборку React):
 
 ```bash
-source .venv/bin/activate
-python backend/main.py
+source "$HOME/.venvs/ruscholar/bin/activate"
+ruscholar-web   # то же, что python -m backend.main
 ```
 Откройте в браузере **`http://localhost:8000`**.
 
@@ -353,8 +366,8 @@ python backend/main.py
 Для изменения фронтенд-кода React:
 ```bash
 # Терминал 1: Запуск API
-source .venv/bin/activate
-python backend/main.py
+source "$HOME/.venvs/ruscholar/bin/activate"
+RUSCHOLAR_RELOAD=1 ruscholar-web   # автоперезапуск backend
 
 # Терминал 2: Запуск Vite Dev Server
 cd frontend
@@ -421,12 +434,16 @@ cp .env.example .env
 | :--- | :--- | :--- |
 | `DEEPSEEK_API_KEY` | *(Пусто)* | API-ключ для облачного judge-модуля. |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | URL облачного API DeepSeek. |
-| `RUSCHOLAR_MODEL_PATH` | `models/Qwen3-4B-Q5_K_M.gguf` | Локальный путь к модели GGUF. |
+| `RUSCHOLAR_MODEL_PATH` | `models/Qwen3-8B-Q5_K_M.gguf` | Локальный путь к модели GGUF. |
 | `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/...` | Ссылка для автоматической загрузки модели. |
 | `RUSCHOLAR_RULES_PATH` | `naturalization_layer/rules/polishing_rules_v5.json` | Путь к правилам письма Thesis Butler. |
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | Слои модели на GPU (-1 для максимума, 0 для CPU). |
-| `RUSCHOLAR_HOST` | `0.0.0.0` | Хост для запуска backend API. |
+| `RUSCHOLAR_HOST` | `127.0.0.1` | Хост для запуска backend API. По умолчанию доступен только локально; API без аутентификации — используйте `0.0.0.0` только в доверенной сети. |
 | `RUSCHOLAR_PORT` | `8000` | Порт для запуска backend API. |
+| `RUSCHOLAR_SESSION_TTL` | `7200` | Через сколько секунд простоя удаляются сессии (тексты на анализ, загруженные источники). |
+| `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Разрешённые CORS-источники (через запятую); нужны только для dev-сервера Vite. |
+| `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | Таймаут запросов к облачному judge (сек.). |
+| `RUSCHOLAR_MAX_UPLOAD_MB` | `50` | Максимальный размер одного загружаемого файла (МБ). |
 
 ---
 
@@ -464,7 +481,7 @@ Below is the visual dashboard showing the hybrid diagnostics workflow in action:
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!NOTE]
-> The Web UI highlights stylistic and evidence anomalies in real-time. Sentences are color-coded (yellow for warning, red for high risk) based on rule violations, perplexity (PPL) anomalies, and citation verification results. This is designed to serve as a **review assistant and evidence tracer**, not an automated verdict of plagiarism or AI generation.
+> The Web UI highlights stylistic and evidence anomalies in real-time. Sentences that need work get a fine underline and a numbered margin note, like an editor's marginalia; opening a note shows the reason, metrics, a suggested rewrite and the citation check (screenshot uses sample data). This is designed to serve as a **review assistant and evidence tracer**, not an automated verdict of plagiarism or AI generation.
 
 ---
 
@@ -477,7 +494,7 @@ Below is the visual dashboard showing the hybrid diagnostics workflow in action:
 *   **PhD Workflow Router**: Automatically detects the user's specific writing stage (outlining, writing, literature review, or evidence auditing) and plans a sequence of tool calls (Tool Execution Plan) to guide the AI client.
 *   **VAK Academic Specialty Mapping**: Matches the dissertation topic with the latest VAK specialty codes and passports (e.g., 2.3.1 System Analysis, 1.2.2 Mathematical Modeling) to warn against out-of-scope content and ensure alignment with official Russian academic requirements.
 *   **Granular Claim & Evidence NLI Auditing**: Automatically extracts key scientific claims from the draft, determines whether they logically require bibliographic support, and audits the logical alignment between assertions and reference snippets using Natural Language Inference (SUPPORTED / CONTRADICTED / NEUTRAL).
-*   **Local-First Privacy**: Supports local GGUF model execution (`Qwen3-4B`), offline physical perplexity (PPL) probing, and local PDF/BibTeX database RAG, ensuring your unpublished draft stays safe on your machine.
+*   **Local-First Privacy**: Supports local GGUF model execution (`Qwen3-8B`), offline physical perplexity (PPL) probing, and local PDF/BibTeX database RAG, ensuring your unpublished draft stays safe on your machine.
 *   **LLM-as-NLI Judge Citation Audit**: Automatically checks the logical support of in-text citations against reference sources, classifying relations as *Entailment (Supported)*, *Contradiction*, or *Neutral (Not Enough Info)*.
 *   **FastMCP Stdio Daemon**: Built-in support for the Model Context Protocol (MCP), allowing AI agents like Claude Code, Cursor, and Claude Desktop to interact directly with your manuscript library.
 *   **Hybrid & Cloud Scalability**: Choose from fully offline CPU/GPU diagnostics, hybrid execution (local PPL probe + cloud DeepSeek reasoning), or pure cloud mode.
@@ -517,10 +534,10 @@ RuScholar Studio is the engineering and visualization runtime built on top of th
 
 | Resource | Minimum | Recommended |
 | :--- | :--- | :--- |
-| **Python** | 3.9+ | 3.10+ |
-| **Node.js** | 18+ | 20+ |
+| **Python** | 3.10+ | 3.12 |
+| **Node.js** | 20.19+ / 22.12+ | 22+ |
 | **RAM** | 8 GB (for cloud-only mode) | 16 GB+ (for local model mode) |
-| **Disk Space** | 500 MB (source and dependencies) | 4 GB (includes 2.7 GB local GGUF model) |
+| **Disk Space** | 500 MB (source and dependencies) | 8 GB (includes ~5.9 GB local GGUF model) |
 | **OS** | macOS / Windows / Linux | macOS Apple Silicon (with Metal acceleration) |
 
 ---
@@ -549,9 +566,9 @@ chmod +x setup.sh
 
 #### 2. Local Model Setup
 
-To use the `local` or `hybrid` modes offline, the system utilizes the **Qwen3-4B-Q5_K_M GGUF** model (approx. 2.7 GB). By default, it looks for the model file at:
+To use the `local` or `hybrid` modes offline, the system utilizes the **Qwen3-8B-Q5_K_M GGUF** model (approx. 5.9 GB). By default, it looks for the model file at:
 ```
-models/Qwen3-4B-Q5_K_M.gguf
+models/Qwen3-8B-Q5_K_M.gguf
 ```
 
 You can download it manually or let the setup script/MCP tool handle it.
@@ -567,8 +584,8 @@ python -c "from naturalization_layer.model_downloader import download_model; fro
 To start the single-port integrated server (where FastAPI hosts the pre-built React frontend):
 
 ```bash
-source .venv/bin/activate
-python backend/main.py
+source "$HOME/.venvs/ruscholar/bin/activate"
+ruscholar-web   # same as python -m backend.main
 ```
 Open **`http://localhost:8000`** in your browser.
 
@@ -576,8 +593,8 @@ Open **`http://localhost:8000`** in your browser.
 If you want to modify the React frontend:
 ```bash
 # Terminal 1: Starts Backend API
-source .venv/bin/activate
-python backend/main.py
+source "$HOME/.venvs/ruscholar/bin/activate"
+RUSCHOLAR_RELOAD=1 ruscholar-web   # auto-reload backend
 
 # Terminal 2: Starts Frontend Dev Server
 cd frontend
@@ -644,12 +661,16 @@ cp .env.example .env
 | :--- | :--- | :--- |
 | `DEEPSEEK_API_KEY` | *(Empty)* | API key for DeepSeek cloud judge models. |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | Custom endpoint for cloud judge APIs. |
-| `RUSCHOLAR_MODEL_PATH` | `models/Qwen3-4B-Q5_K_M.gguf` | Path to the local GGUF model file. |
-| `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/Qwen/Qwen3-4B-GGUF/...` | URL to download the model from. |
+| `RUSCHOLAR_MODEL_PATH` | `models/Qwen3-8B-Q5_K_M.gguf` | Path to the local GGUF model file. |
+| `RUSCHOLAR_MODEL_URL` | `https://modelscope.cn/models/Qwen/Qwen3-8B-GGUF/...` | URL to download the model from. |
 | `RUSCHOLAR_RULES_PATH` | `naturalization_layer/rules/polishing_rules_v5.json` | Path to the custom skill JSON rules. |
 | `RUSCHOLAR_GPU_LAYERS` | `-1` | Number of model layers offloaded to GPU (-1 for max, 0 for CPU). |
-| `RUSCHOLAR_HOST` | `0.0.0.0` | Binding host for backend API. |
+| `RUSCHOLAR_HOST` | `127.0.0.1` | Binding host for backend API. Loopback-only by default; the API has no authentication, so only use `0.0.0.0` on a trusted network. |
 | `RUSCHOLAR_PORT` | `8000` | Binding port for backend API. |
+| `RUSCHOLAR_SESSION_TTL` | `7200` | Idle seconds after which sessions (pending analyses, uploaded references) are dropped. |
+| `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed CORS origins (comma-separated); only the Vite dev server needs them. |
+| `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | Timeout for cloud judge requests (seconds). |
+| `RUSCHOLAR_MAX_UPLOAD_MB` | `50` | Maximum size of a single uploaded file (MB). |
 
 ---
 

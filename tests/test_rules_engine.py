@@ -87,3 +87,15 @@ def test_analyze_text_rules_bibliography():
             
     assert smith_found is True
     assert ivanov_found is True
+
+
+def test_missing_spacy_model_is_reported_as_fallback(monkeypatch):
+    from naturalization_layer import rules_engine
+    monkeypatch.setattr(rules_engine, "get_nlp", lambda: None)
+    res = rules_engine.analyze_text_rules("Это первое предложение. Это второе предложение.")
+    assert res["nlp_backend"] == "fallback"
+
+
+def test_spacy_model_is_loaded_once():
+    from naturalization_layer import rules_engine
+    assert rules_engine.get_nlp() is rules_engine.get_nlp()

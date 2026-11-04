@@ -1,0 +1,70 @@
+{
+  "task": "RS-0016",
+  "date": "2026-11-04",
+  "python": {
+    "passed": 111,
+    "deselected": 1,
+    "version": "3.13.12",
+    "pip_check": true
+  },
+  "frontend": {
+    "lint": true,
+    "config_passed": 8,
+    "api_passed": 4,
+    "build": true
+  },
+  "mcp": {
+    "source": {
+      "tools": 17,
+      "workflow_call": true,
+      "entrypoint": "source"
+    },
+    "installed": {
+      "tools": 17,
+      "workflow_call": true,
+      "entrypoint": "installed"
+    },
+    "wheel": "ruscholar_studio-5.4.1-py3-none-any.whl"
+  },
+  "ppl_synthetic_benchmark": {
+    "synthetic_only": true,
+    "tokens": 16,
+    "vocab": 150000,
+    "repeats": 3,
+    "median_seconds": {
+      "reference": 0.24129570904187858,
+      "vectorized": 0.00653712498024106
+    },
+    "speedup": 36.911594893965244,
+    "absolute_nll_error": 0.0,
+    "vectorized_peak_scratch_bytes": 18003920
+  },
+  "native_web_smoke": {
+    "ppl": [
+      40.75,
+      17.89
+    ],
+    "events": [
+      "init",
+      "result",
+      "result",
+      "done"
+    ],
+    "synthetic_text": true
+  },
+  "unverified": [
+    "live cloud API",
+    "Windows runtime",
+    "new Python 3.10/3.12 matrix",
+    "remote GitHub CI",
+    "diagnostic accuracy",
+    "long manuscript benchmark"
+  ],
+  "dependency_advisory": {
+    "severity": "moderate",
+    "package": "minimatch",
+    "installed": "10.2.5",
+    "development_only": true,
+    "source": "npm bulk audit HTTP 200"
+  }
+}

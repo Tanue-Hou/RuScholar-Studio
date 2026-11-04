@@ -1,0 +1,3 @@
+# 完整本机开发环境
+-r requirements.txt
+-r requirements-test.txt

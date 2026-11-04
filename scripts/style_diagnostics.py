@@ -15,7 +15,8 @@ console = Console()
 def main():
     parser = argparse.ArgumentParser(description="Style Diagnostics Tool")
     parser.add_argument("--file", required=True, help="Path to the file to analyze")
-    parser.add_argument("--model_path", default="models/Qwen3-4B-Q5_K_M.gguf", help="Path to the model file")
+    from services.shared_state import MODEL_PATH
+    parser.add_argument("--model_path", default=MODEL_PATH, help="Path to the model file")
     args = parser.parse_args()
 
     table = Table(title="Style Diagnostics Initialization", show_header=False)
