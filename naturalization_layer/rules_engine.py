@@ -1,25 +1,32 @@
-import spacy
-import sys
-
-_NLP = None
-_NLP_FAILED = False
-
-def _get_nlp():
-    """只加载一次 spaCy 俄语模型；加载失败时明确提示一次，并退回简易分句。"""
-    global _NLP, _NLP_FAILED
-    if _NLP is None and not _NLP_FAILED:
-        try:
-            _NLP = spacy.load("ru_core_news_sm")
-        except Exception as e:
-            _NLP_FAILED = True
-            print(
-                f"[RuScholar] 警告：无法加载 spaCy 俄语模型 ru_core_news_sm（{e}）。"
-                "规则引擎将退回简易分句，名词链、被动语态等检测会失准。"
-                "请运行：python -m spacy download ru_core_news_sm",
-                file=sys.stderr,
-            )
-    return _NLP
+import functools
+import logging
 import re
+
+import spacy
+
+logger = logging.getLogger(__name__)
+
+SPACY_MODEL_NAME = "ru_core_news_sm"
+
+
+@functools.lru_cache(maxsize=1)
+def get_nlp():
+    """
+    Load the Russian spaCy pipeline once per process.
+
+    Returns None when the model is not installed; callers then use the crude
+    heuristic fallback and must report it (see "nlp_backend" in the result).
+    """
+    try:
+        return spacy.load(SPACY_MODEL_NAME)
+    except Exception as e:
+        logger.warning(
+            "spaCy model '%s' unavailable (%s). Falling back to heuristic tokenisation: "
+            "noun/verb ratio, passive voice and genitive chains will NOT be reliable. "
+            "Install it with: python -m spacy download %s",
+            SPACY_MODEL_NAME, e, SPACY_MODEL_NAME,
+        )
+        return None
 
 class TextPreprocessor:
     def __init__(self):
@@ -129,13 +136,12 @@ def analyze_text_rules(text: str) -> dict:
             bib_start = idx
             break
             
-    try:
-        nlp = _get_nlp()
-        if nlp is None:
-            raise RuntimeError("spaCy model unavailable")
+    nlp = get_nlp()
+    nlp_backend = "spacy" if nlp is not None else "fallback"
+    if nlp is not None:
         doc = nlp(protected_text)
         sentences_doc = list(doc.sents)
-    except Exception:
+    else:
         class MockSent:
             def __init__(self, t):
                 self.text = t
@@ -270,7 +276,10 @@ def analyze_text_rules(text: str) -> dict:
         "length_variance": variance,
         "sentences": sentences_restored,
         "sentence_diagnostics": sentence_diagnostics,
-        "global_metrics": global_metrics
+        "global_metrics": global_metrics,
+        # "fallback" means spaCy's Russian model is missing and the morphology
+        # metrics above are rough guesses; surface this to the user.
+        "nlp_backend": nlp_backend
     }
 
 def should_run_ppl_heuristic(

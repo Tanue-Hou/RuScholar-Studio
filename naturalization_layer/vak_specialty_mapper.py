@@ -1,7 +1,9 @@
 import os
 import json
 import re
+import asyncio
 from naturalization_layer.russian_lemmatizer import lemmatize_sentence
+from naturalization_layer.llm_client import resolve_cloud_model
 
 def load_vak_nomenclature() -> list[dict]:
     """
@@ -87,7 +89,8 @@ async def map_vak_specialty(
     Uses LLM (local or cloud) if available, otherwise falls back to keyword-based matching.
     """
     nomenclature = load_vak_nomenclature()
-    
+    engine_type = resolve_cloud_model(engine_type)
+
     use_llm = False
     if llm is not None:
         use_llm = True
@@ -129,14 +132,14 @@ You MUST reply strictly in JSON format (no markdown blocks, no think tag in outp
         if engine_type in ("deepseek-v4-pro", "deepseek-v4-flash", "deepseek-flash"):
             from naturalization_layer.llm_judge import StyleJudge
             judge = StyleJudge(None)
-            raw_text = judge._call_deepseek_api(engine_type, api_key, base_url, sys_prompt, user_prompt)
-            # Remove any markdown wrapping
-            if raw_text.strip().startswith("```"):
-                _, raw_text = judge._clean_json_text(raw_text)
+            raw_text = await asyncio.to_thread(
+                judge._call_deepseek_api, engine_type, api_key, base_url, sys_prompt, user_prompt
+            )
+            _, raw_text = judge._clean_json_text(raw_text)
         else:
             # Local Llama model
             prompt = f"<|im_start|>system\n{sys_prompt}\nIMPORTANT: You MUST write your reasoning inside <think>...</think> tags strictly in Chinese (中文/zh-CN). Keep reasoning concise. Write the final JSON object clearly.\n<|im_end|>\n<|im_start|>user\n{user_prompt}\n<|im_end|>\n<|im_start|>assistant\n<think>\n"
-            response = llm(prompt, max_tokens=1024, stop=["<|im_end|>"])
+            response = await asyncio.to_thread(llm, prompt, max_tokens=1024, stop=["<|im_end|>"])
             raw_text = response["choices"][0]["text"].strip()
             
             from naturalization_layer.llm_judge import StyleJudge

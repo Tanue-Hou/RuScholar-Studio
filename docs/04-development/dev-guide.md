@@ -28,14 +28,14 @@ PYTHONDONTWRITEBYTECODE=1 "$HOME/miniforge3/bin/python3" -B -m uvicorn backend.m
 PYTHONDONTWRITEBYTECODE=1 "$HOME/miniforge3/bin/python3" -B -m mcp_server.server
 ```
 
-浏览器打开 `http://127.0.0.1:8000`。开发热重载仍可运行 `python backend/main.py`；保存任意被监控的 Python 文件会中断进行中的 SSE 请求，运行验收应使用上面的稳定启动命令。
+浏览器打开 `http://127.0.0.1:8000`。开发热重载显式设置 `RUSCHOLAR_RELOAD=1 python backend/main.py`；保存任意被监控的 Python 文件会中断进行中的 SSE 请求，运行验收应使用上面的稳定启动命令。
 
 ## 3. 已知坑（修复前请注意）
 
 | 问题 | 临时规避 | 修复任务 |
 | --- | --- | --- |
 | ~~`pip install mcp` 会装 2.x~~ | 已在 requirements 中限定 `mcp<2` | RS-0001 ✔ |
-| ~~`.env` 不会被自动读取~~ | 现在由 `services/config.py` 自动读取 | RS-0002 ✔ |
+| ~~`.env` 不会被自动读取~~ | 现在由 `services/settings.py` 复用 config 解析器自动读取 | RS-0002 ✔ |
 | ~~后端 8000、前端代理 6666~~ | 统一为 8000 | RS-0002 ✔ |
 | ~~没装 llama-cpp 时测试收集失败~~ | 现在自动跳过 | RS-0001 ✔ |
 | 本机环境不可直接跨设备复制使用 | 每台机器选择已有环境或在 OneDrive 外安装依赖 | — |
@@ -57,11 +57,15 @@ PYTHONDONTWRITEBYTECODE=1 "$HOME/miniforge3/bin/python3" -B -m mcp_server.server
 - 禁止 `sys.path.append` 式导入出现在新代码中（存量脚本除外）
 
 **前端**
-- TypeScript 严格模式；API 调用集中在 `src/api/`（RS-0007 后）
+- TypeScript 严格模式；API 调用集中在 `src/api/`，诊断生命周期由 `src/hooks/useDiagnosis.ts` 管理
 - 与后端 SSE 字段的类型定义保持一致（见架构文档第 2 节契约）
 
 **数据资产**
 - `rules/*.json`、`calibration/*.json` 修改需在任务卡写明依据，并补回归测试
 
 ## 6. 新增依赖流程
-在任务卡说明理由 → 写入 `requirements.txt`（带上界）或 `package.json` → 评审时单独确认。
+在任务卡说明理由 → 写入 `requirements-core.txt` / `requirements-local.txt` / `requirements-test.txt`（带上界；pyproject 动态复用）或 `package.json` → 评审时单独确认。
+
+## 7. 安装包与前端
+
+`pip install -e .` 提供 `ruscholar-mcp` / `ruscholar-web`；本地 GGUF 依赖选择 `pip install -e ".[local]"`。wheel 已在源码目录外验证 MCP 子包与命令入口；完整网页仍从源码目录的 `frontend/dist` 提供，需要先构建。不要把 wheel 的 MCP/API 安装通过写成独立网页包已验收。

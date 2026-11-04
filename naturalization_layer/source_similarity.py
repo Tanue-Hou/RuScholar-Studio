@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import re
 
 def calculate_ngram_similarity(text1: str, text2: str, n: int = 3) -> float:

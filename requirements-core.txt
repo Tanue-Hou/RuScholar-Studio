@@ -10,3 +10,4 @@ python-multipart>=0.0.6,<1
 sse-starlette>=1.6.5,<4
 mcp>=1.0,<2
 pymorphy3>=2.0,<3
+numpy>=1.24,<3

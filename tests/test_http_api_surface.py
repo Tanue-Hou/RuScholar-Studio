@@ -18,9 +18,9 @@ def test_existing_api_contract_is_preserved(tmp_path, monkeypatch):
     for path, method in [("/api/upload", "post"), ("/api/upload_references", "post"),
                          ("/api/detect_discipline", "post"), ("/api/session", "post"),
                          ("/api/diagnose", "get"), ("/api/check_model", "get"),
-                         ("/api/download_model", "get")]:
+                         ("/api/download_model", "post")]:
         assert method in paths[path]
-    monkeypatch.setattr("backend.main.MODEL_PATH", str(tmp_path / "absent.gguf"))
+    monkeypatch.setattr("backend.main.registry._model_path", str(tmp_path / "absent.gguf"))
     response = TestClient(app).get("/api/check_model")
     assert response.status_code == 200
     assert response.json() == {"exists": False}

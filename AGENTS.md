@@ -22,7 +22,7 @@
 | `backend/` | FastAPI 入口 `main.py`：只放路由与装配 |
 | `services/` | 业务编排（诊断流水线、引文审计、报告、共享状态），Web 与 MCP 共用 |
 | `naturalization_layer/` | 算法层；`rules/`、`calibration/` 是数据资产 |
-| `mcp_server/` | MCP stdio 服务，工具只做参数适配 |
+| `mcp_server/` | `app.py` 装配、`core.py` 共用适配、`tools/` 分组；`server.py` 兼容入口 |
 | `frontend/` | React 19 + Vite 8 + TS |
 | `tests/` | pytest；样例在 `tests/fixtures/` |
 | `scripts/` | 可复用脚本；`legacy/` 旧 Streamlit UI（只读）；`sites/` 落地页 |
@@ -42,7 +42,7 @@ python -m mcp_server.server      # MCP
 
 pytest -q                        # 默认排除真实模型；Mock 测试不依赖 llama-cpp
 python -B scripts/check_backend.py # CI 同一入口；排除真实模型，用 requirements-ci.txt 环境即可
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm run test:api && npm run build
 cd frontend && npm run test:config  # 实际 TS/Python 配置一致性；可设置 PYTHON_FOR_TESTS
 ```
 前后端只读根 `.env`，shell 变量优先，空端口回退 8000。运行依赖与构建缓存放本机，不在 OneDrive 安装；本轮测试/构建使用临时副本与既有本机依赖。

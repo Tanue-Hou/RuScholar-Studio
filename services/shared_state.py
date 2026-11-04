@@ -1,8 +1,15 @@
 import asyncio
 import os
 
-# Global session references cache
-session_references = {}
+from services.settings import settings
+from services.session_store import ExpiringDict
+
+# Uploaded references per session: {"bibtex", "corpus", "retrievers", "online_cache", "bib_mapping"}.
+# Create entries via services.reference_service.ensure_reference_session().
+session_references = ExpiringDict(settings.session_ttl_seconds)
+
+# Analyses registered via POST /api/session and consumed by GET /api/diagnose.
+pending_analyses = ExpiringDict(settings.session_ttl_seconds)
 
 # Lock for Llama model local inference
 model_lock = asyncio.Lock()

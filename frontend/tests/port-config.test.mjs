@@ -42,7 +42,7 @@ for (const scenario of cases) {
       const configure = evaluate(x => x, () => ({}), readFileSync, fileURLToPath,
         pathToFileURL(join(dir, 'frontend/vite.config.ts')).href)
       const target = configure().server.proxy['/api'].target
-      assert.equal(target, `http://localhost:${scenario.expected}`)
+      assert.equal(target, `http://127.0.0.1:${scenario.expected}`)
       const code = [
         'import importlib.util, sys',
         'spec = importlib.util.spec_from_file_location("config", sys.argv[1])',
