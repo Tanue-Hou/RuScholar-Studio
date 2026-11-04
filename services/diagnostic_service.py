@@ -256,7 +256,15 @@ async def run_sentence_diagnose_stream(
         "data": json.dumps({
             "total_sentences": len(sentences),
             "discipline": discipline,
-            "nlp_backend": rules_res.get("nlp_backend", "spacy")
+            "nlp_backend": rules_res.get("nlp_backend", "spacy"),
+            # Thresholds actually applied for this discipline, so the UI can
+            # show each metric against the same bounds the pipeline used.
+            "calibration": {
+                "ppl_low": ppl_low,
+                "ppl_high": ppl_high,
+                "nv_ratio_max": nv_ratio_max,
+                "passive_max": calib.get("passive_max"),
+            },
         })
     }
 

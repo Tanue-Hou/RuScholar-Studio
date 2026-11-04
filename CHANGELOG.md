@@ -6,6 +6,28 @@ up the work without re-reading the whole diff.
 
 ---
 
+## 2026-11-04 — RS-0018: refine the restored cockpit UI (less "AI look", more information)
+
+Base: `main` b69bd85 (RS-0017 restored UI). Layout and every interaction are unchanged.
+- **Visual:** removed neon cyan glow, gradients, glass blur, the Sparkles logo, emoji, and
+  bilingual "(English)" labels everywhere. Neutral graphite/paper surfaces; colour only for
+  status, always with a text label. Fonts are bundled (Inter, Source Serif 4,
+  JetBrains Mono) instead of loaded from Google Fonts.
+- **New information:**
+  - document statistics;
+  - discipline thresholds;
+  - a four-cell overview;
+  - a per-sentence perplexity chart (hover tooltip, click to select);
+  - an issue breakdown and lexical totals;
+  - a metrics-versus-threshold table for the selected sentence.
+- **Backend:** the SSE `init` event now carries `calibration`
+  (`ppl_low`, `ppl_high`, `nv_ratio_max`, `passive_max`). The field is additive and covered
+  by a test.
+- **Cleanup:** deleted the unused components from the rejected phase-3 redesign.
+- **Details and reference renders:** `collab/reviews/2026-11-04-RS-0018-ui-refine.md`.
+
+---
+
 ## 2026-11-04 — Architecture review, phase 3: packaging, CI, MCP split, frontend redesign
 
 Branch: `claude/sharp-einstein-dmbnvw` · Base commit: `7faad33` (phase 2)

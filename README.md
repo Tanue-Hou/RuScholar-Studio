@@ -31,7 +31,7 @@
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!IMPORTANT]
-> Web UI 以页边批注的形式标出正文中的风格、句法和参考文献证据链问题：需要修改的句子带细下划线和编号，点开编号即可看到原因、指标、改写建议与引用核验结果（截图使用示例数据）。这些标记是为作者提供**修改建议与证据链线索**，绝非对学术不端或 AI 代写的自动裁决。
+> Web UI 左栏为手稿原文：需要修改的句子带细下划线，句末标注本句困惑度（低于本学科下限时着色）；右栏依次给出学科阈值、逐句困惑度分布、四项文风风险、问题构成与词法汇总，以及选中句子的指标对照表、诊断依据、改写建议和引用核验（截图使用示例数据）。这些标记是为作者提供**修改建议与证据链线索**，绝非对学术不端或 AI 代写的自动裁决。
 
 ---
 
@@ -255,7 +255,7 @@ RuScholar Studio 采用 **MIT License** 开源。
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!NOTE]
-> Web UI подсвечивает стилистические аномалии и проблемы с источниками в реальном времени. Проблемные предложения помечаются тонким подчёркиванием и номером примечания, как редакторские пометки на полях; по номеру открываются причина, метрики, вариант правки и результат проверки цитирования через NLI (на снимке — демонстрационные данные). Данные отчеты служат **помощником для рецензирования**, а не автоматическим вердиктом о плагиате или использовании ИИ.
+> Слева — текст рукописи: предложения, требующие правки, подчёркнуты тонкой линией, после каждого указана перплексия (цветом — если ниже нижней границы для специальности). Справа — пороги специальности, распределение перплексии по предложениям, четыре показателя стилевого риска, структура замечаний и лексические итоги, а для выбранного предложения — таблица метрик с порогами, обоснование, вариант правки и проверка цитирования (на снимке — демонстрационные данные). Данные отчеты служат **помощником для рецензирования**, а не автоматическим вердиктом о плагиате или использовании ИИ.
 
 ---
 
@@ -481,7 +481,7 @@ Below is the visual dashboard showing the hybrid diagnostics workflow in action:
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!NOTE]
-> The Web UI highlights stylistic and evidence anomalies in real-time. Sentences that need work get a fine underline and a numbered margin note, like an editor's marginalia; opening a note shows the reason, metrics, a suggested rewrite and the citation check (screenshot uses sample data). This is designed to serve as a **review assistant and evidence tracer**, not an automated verdict of plagiarism or AI generation.
+> The manuscript sits on the left: sentences that need work get a fine underline, and each sentence carries its perplexity (coloured when below the discipline's lower bound). The right panel shows the discipline thresholds, a per-sentence perplexity chart, four style-risk scores, the issue breakdown and lexical totals, and for the selected sentence a metrics-versus-threshold table, the reasoning, a suggested rewrite and the citation check (screenshot uses sample data). This is designed to serve as a **review assistant and evidence tracer**, not an automated verdict of plagiarism or AI generation.
 
 ---
 

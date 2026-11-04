@@ -1,35 +1,27 @@
-import React, { useState, useRef, useEffect } from 'react';
-import type { LucideIcon } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Upload,
   FileText,
-  AlertCircle,
   Sun,
   Moon,
-  Sparkles,
-  Cpu,
-  CheckCircle2,
-  Play,
   Square,
   Copy,
   Check,
-  BookOpen,
   RotateCcw,
-  Compass,
-  Layers,
   ChevronRight,
   ExternalLink,
-  ShieldCheck,
-  Zap,
-  Activity,
-  AlertTriangle
+  Play,
 } from 'lucide-react';
 import './index.css';
 import { uploadDocument } from './api/client';
+import { PplStrip } from './components/PplStrip';
 import { useDiagnosis } from './hooks/useDiagnosis';
 import { useModelStatus } from './hooks/useModelStatus';
 import { useTheme } from './hooks/useTheme';
-import type { DiagnosticResult, EngineType, SentenceMetrics } from './types';
+import {
+  DEFAULT_CALIBRATION, documentStats, fmt, int, issueBreakdown, lexicalTotals, pplStats, riskLevel,
+} from './lib/analysis';
+import type { CitationAudit, DiagnosticResult, EngineType, SentenceMetrics } from './types';
 
 interface SentenceItem {
   text: string;
@@ -38,25 +30,55 @@ interface SentenceItem {
   metrics?: SentenceMetrics | null;
 }
 
-const DISCIPLINE_MAP: Record<string, { en: string; zh: string; color: string; icon: LucideIcon }> = {
-  SCI_TECH: { en: "Sci-Tech (Physical Sciences & Engineering)", zh: "理工科 (自然科学与工程技术)", color: "var(--accent-cyan)", icon: Cpu },
-  AUTOMATION_CONTROL: { en: "Automation & Control Engineering", zh: "自动化与控制工程", color: "var(--accent-amber)", icon: Compass },
-  AGRI_MED: { en: "Agricultural & Medical Sciences", zh: "农田与医药生命科学", color: "var(--accent-emerald)", icon: ShieldCheck },
-  HUM_POL_ECON: { en: "Humanities & Social Sciences", zh: "人文社科 (政治经济与社会科学)", color: "var(--accent-indigo)", icon: BookOpen },
-  ARTS_SPORTS: { en: "Arts, Sports & Culture", zh: "艺术体育与文化研究", color: "var(--accent-pink)", icon: Sparkles },
-  UNIVERSAL: { en: "Universal Academic Domain", zh: "通用学术与跨学科领域", color: "var(--text-secondary)", icon: Layers }
+const DISCIPLINE_MAP: Record<string, { zh: string; ru: string }> = {
+  SCI_TECH: { zh: '理工科 · 自然科学与工程技术', ru: 'Естественные и технические науки' },
+  AUTOMATION_CONTROL: { zh: '自动化与控制工程', ru: 'Автоматизация и управление' },
+  AGRI_MED: { zh: '农学与医学生命科学', ru: 'Сельскохозяйственные и медицинские науки' },
+  HUM_POL_ECON: { zh: '人文社科 · 政治、经济与社会', ru: 'Гуманитарные и социальные науки' },
+  ARTS_SPORTS: { zh: '艺术、体育与文化研究', ru: 'Искусство, спорт и культура' },
+  UNIVERSAL: { zh: '通用学术 · 跨学科', ru: 'Междисциплинарная область' },
 };
 
-const ISSUE_TITLE_MAP: Record<string, { title: string; color: string; bg: string }> = {
-  ai_generated_suspicion: { title: "AI 生成特征预警 (AI Writing Pattern)", color: "var(--accent-rose)", bg: "var(--accent-rose-bg)" },
-  machine_translation_cliche: { title: "机器翻译与学术套话 (Translationese & Cliché)", color: "var(--accent-amber)", bg: "var(--accent-amber-bg)" },
-  citation_gap: { title: "文献引用支撑不足 (Citation Gap Alert)", color: "var(--accent-amber)", bg: "var(--accent-amber-bg)" },
-  citation_contradiction: { title: "文献论点冲突 (Citation Contradiction)", color: "var(--accent-rose)", bg: "var(--accent-rose-bg)" },
-  semantic_plagiarism_risk: { title: "学术改写重合风险 (High Similarity Risk)", color: "var(--accent-amber)", bg: "var(--accent-amber-bg)" },
-  style_heavy: { title: "句式臃肿与冗余 (Syntactic Overload)", color: "var(--accent-violet)", bg: "var(--accent-violet-bg)" },
-  json_parse_error: { title: "格式解析异常 (Formatting Parse Alert)", color: "var(--text-secondary)", bg: "rgba(255,255,255,0.05)" },
-  api_request_error: { title: "云端服务连接异常 (API Connection Alert)", color: "var(--text-secondary)", bg: "rgba(255,255,255,0.05)" },
+const ISSUE_TITLES: Record<string, string> = {
+  ai_generated_suspicion: 'AI 生成特征',
+  machine_translation_cliche: '翻译腔与学术套话',
+  citation_gap: '引用支撑不足',
+  citation_contradiction: '与所引文献冲突',
+  semantic_plagiarism_risk: '与文献表述高度重合',
+  style_heavy: '句式臃肿',
+  json_parse_error: '模型输出无法解析',
+  api_request_error: '云端接口未响应',
 };
+const issueTitle = (t: string | null) => ISSUE_TITLES[t ?? ''] ?? '文风提示';
+
+/** Issue families carry a tone so the eye can sort them; colour is never the only cue. */
+const issueTone = (t: string | null): 'critical' | 'warning' | 'muted' =>
+  t === 'ai_generated_suspicion' || t === 'citation_contradiction' ? 'critical'
+    : t === 'json_parse_error' || t === 'api_request_error' ? 'muted' : 'warning';
+
+const ENGINE_LABELS: Record<EngineType, string> = {
+  local: '本地 · Qwen3-8B GGUF',
+  'hybrid-pro': '混合 · 本地 PPL + DeepSeek Pro',
+  'hybrid-flash': '混合 · 本地 PPL + DeepSeek Flash',
+  'cloud-pro': '云端 · DeepSeek Pro',
+  'cloud-flash': '云端 · DeepSeek Flash',
+};
+
+const RISK_ROWS = [
+  { key: 'predictability', label: '可预测性', hint: '词汇分布过于平滑，困惑度偏低' },
+  { key: 'uniformity', label: '句式均匀度', hint: '句长与句式结构过于整齐' },
+  { key: 'translationese', label: '翻译腔', hint: '名词化、被动语态、第二格链' },
+  { key: 'redundancy', label: '语义冗余', hint: '套话、连接词与冗长修饰' },
+] as const;
+
+const CHECKS = [
+  ['困惑度 PPL', '本地 Qwen3 逐句计算；低于学科下限提示文本过于可预测，高于上限提示语法或翻译问题。'],
+  ['名词 / 动词比', '俄语学术文体的名词化程度；超过学科上限视为结构臃肿。'],
+  ['被动语态与第二格链', '统计 -ся / 被动形动词与连续属格结构，识别翻译腔。'],
+  ['学术套话与连接词', '匹配 PhD Thesis Butler 规则库中的高频模板表达。'],
+  ['引用核验', '按文内引标检索本地全文（BM25）或 OpenAlex 摘要，再以 NLI 判断支持、矛盾或证据不足。'],
+  ['参考文献完整性', '交叉核对文内标号与文末书目，发现缺失与未引用条目。'],
+];
 
 function App() {
   const diagnosis = useDiagnosis();
@@ -71,6 +93,7 @@ function App() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const sentenceRefs = useRef<(HTMLSpanElement | null)[]>([]);
   const rightColumnRef = useRef<HTMLDivElement | null>(null);
+  const inspectorRef = useRef<HTMLElement | null>(null);
   const [engineType, setEngineType] = useState<EngineType>('local');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('https://api.deepseek.com/v1');
@@ -83,14 +106,16 @@ function App() {
   const runningRisks = diagnosis.risks;
   const integrityWarnings = diagnosis.warnings;
   const progress = { current: diagnosis.summary.completed, total: diagnosis.summary.total };
-  const completed = diagnosis.results.filter((r): r is DiagnosticResult => r !== null);
-  const allDiagnostics = Object.fromEntries(completed.map(r => [r.index, r]));
-  const ppls = completed.map(r => r.ppl).filter((p): p is number => typeof p === 'number' && Number.isFinite(p));
-  const stats = {
-    flaggedCount: diagnosis.summary.flagged,
-    totalPPL: ppls.reduce((a, b) => a + b, 0),
-    pplCount: ppls.length,
-  };
+  const completed = useMemo(
+    () => diagnosis.results.filter((r): r is DiagnosticResult => r !== null),
+    [diagnosis.results],
+  );
+  const allDiagnostics: Record<number, DiagnosticResult> = Object.fromEntries(completed.map(r => [r.index, r]));
+  const calib = diagnosis.calibration ?? DEFAULT_CALIBRATION;
+  const ppl = pplStats(completed, calib);
+  const lexical = lexicalTotals(completed, calib);
+  const breakdown = issueBreakdown(completed);
+  const docStats = useMemo(() => documentStats(documentText), [documentText]);
   const referencesUploadStatus = diagnosis.references;
   const sentences: SentenceItem[] = diagnosis.results.map(r => r ?? {
     text: '', status: isAnalyzing ? 'analyzing' : 'skipped',
@@ -168,513 +193,229 @@ function App() {
     }, 50);
   };
 
-  const renderIntegrityReport = () => (
-    <div className="glass-card slide-in" style={{
-      marginTop: '16px',
-      border: '1px solid rgba(244, 63, 94, 0.3)',
-      background: 'linear-gradient(180deg, rgba(244, 63, 94, 0.06) 0%, transparent 100%)'
-    }}>
-      <div className="card-header" style={{ color: 'var(--accent-rose)', marginBottom: '8px' }}>
-        <AlertTriangle size={16} />
-        <span>参考文献规范与完整性报告 (Citation Integrity)</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-        {integrityWarnings.map((w, idx) => (
-          <div key={idx} style={{
-            background: 'var(--bg-card-inner)',
-            borderRadius: '10px',
-            padding: '12px 14px',
-            fontSize: '13px',
-            border: '1px solid var(--border-subtle)'
-          }}>
-            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
-              {w.text}
-            </div>
-            <div style={{ color: 'var(--accent-amber)', marginBottom: '6px', fontSize: '12px' }}>
-              {w.explanation}
-            </div>
-            {w.suggestion && w.suggestion !== '-' && (
-              <div style={{ color: 'var(--accent-emerald)', fontSize: '12px', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Sparkles size={13} />
-                <span>建议: {w.suggestion}</span>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderCitationAudit = (diag: DiagnosticResult) => {
-    if (!diag.citation_audit || diag.citation_audit.length === 0) return null;
-
-    return (
-      <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-          <ShieldCheck size={14} color="var(--accent-cyan)" />
-          <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--accent-cyan)' }}>
-            引用支撑性核验 (Citation Evidence Audit)
-          </span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {diag.citation_audit.map((audit, aIdx) => {
-            const isSupported = audit.status === 'SUPPORTED';
-            const isContradicted = audit.status === 'CONTRADICTED';
-            const badgeColor = isSupported ? 'var(--accent-emerald)'
-                             : isContradicted ? 'var(--accent-rose)'
-                             : 'var(--accent-amber)';
-            const badgeBg = isSupported ? 'var(--accent-emerald-bg)'
-                           : isContradicted ? 'var(--accent-rose-bg)'
-                           : 'var(--accent-amber-bg)';
-            const statusText = isSupported ? '完全支持 (Supported)'
-                             : isContradicted ? '论点矛盾 (Contradicted)'
-                             : audit.status === 'AUDIT_FAILED' ? '审计未竟'
-                             : '证据支撑偏弱';
-            const sourceText = audit.source === 'local' ? '本地文献全文' : 'OpenAlex 实时摘要';
-            const sourceColor = audit.source === 'local' ? 'var(--accent-cyan)' : 'var(--accent-indigo)';
-            const sourceBg = audit.source === 'local' ? 'var(--accent-cyan-bg)' : 'var(--accent-indigo-bg)';
-
-            return (
-              <div
-                key={aIdx}
-                style={{
-                  padding: '10px 12px',
-                  borderRadius: '8px',
-                  backgroundColor: 'var(--bg-card-inner)',
-                  border: '1px solid var(--border-subtle)',
-                  fontSize: '12px'
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-                    [{audit.key}] {audit.title.substring(0, 42)}{audit.title.length > 42 ? '...' : ''}
-                  </span>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', fontWeight: 600, color: sourceColor, backgroundColor: sourceBg, border: `1px solid ${sourceBg}` }}>
-                      {sourceText}
-                    </span>
-                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '999px', fontWeight: 600, color: badgeColor, backgroundColor: badgeBg, border: `1px solid ${badgeBg}` }}>
-                      {statusText}
-                    </span>
-                  </div>
-                </div>
-
-                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.45', marginBottom: '6px' }}>
-                  <strong style={{ color: 'var(--text-primary)' }}>核验结论:</strong> {audit.explanation_zh}
-                </p>
-
-                {audit.evidence_snippet && (
-                  <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                    <summary style={{ fontSize: '11px', color: 'var(--text-tertiary)', outline: 'none', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <ChevronRight size={12} />
-                      <span>查看引文证据原文 (Evidence Snippet)</span>
-                    </summary>
-                    <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '6px', fontStyle: 'italic', padding: '8px 10px', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', border: '1px solid var(--border-subtle)', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-                      "{audit.evidence_snippet}"
-                    </p>
-                  </details>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+  const selectSentence = (index: number, scrollManuscript = false) => {
+    setSelectedSentenceIndex(index);
+    if (scrollManuscript) scrollToSentence(index);
+    setTimeout(() => inspectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
   };
 
-  const DisciplineIcon = DISCIPLINE_MAP[discipline]?.icon || Layers;
+  const referenceMode = referencesUploadStatus === 'indexed' ? `本地全文证据库 · ${referenceFiles.length} 篇`
+    : referencesUploadStatus === 'metadata' ? '书目信息 + OpenAlex 摘要'
+    : referencesUploadStatus === 'uploading' ? '正在注册参考文献…'
+    : referencesUploadStatus === 'none' && (bibtexFile || referenceFiles.length > 0) ? '已选文献，启动后注册'
+    : referencesUploadStatus === 'failed' ? '注册失败，改用 OpenAlex 摘要'
+    : 'OpenAlex 摘要（未提供本地文献）';
+
+  const pplClass = (v: number | null | undefined) =>
+    typeof v !== 'number' ? '' : v < calib.ppl_low ? 'is-low' : v > calib.ppl_high ? 'is-high' : '';
+
+  const renderAuditList = (audits: CitationAudit[]) => (
+    <ul className="audit-list">
+      {audits.map((audit, aIdx) => {
+        const tone = audit.status === 'SUPPORTED' ? 'good' : audit.status === 'CONTRADICTED' ? 'critical' : audit.status === 'AUDIT_FAILED' ? 'muted' : 'warning';
+        const statusText = audit.status === 'SUPPORTED' ? '支持论点'
+          : audit.status === 'CONTRADICTED' ? '与论点矛盾'
+          : audit.status === 'AUDIT_FAILED' ? '未能核验' : '证据不足';
+        return (
+          <li key={aIdx} className="audit-item" onClick={e => e.stopPropagation()}>
+            <div className="audit-head">
+              <span className="audit-ref"><span className="mono">[{audit.key}]</span> {audit.title}</span>
+              <span className={`tag tone-${tone}`}>{statusText}</span>
+            </div>
+            <div className="audit-meta">
+              {[audit.author, audit.year].filter(Boolean).join(' · ') || '作者与年份未知'} · {audit.source === 'local' ? '依据本地全文' : '依据 OpenAlex 摘要'}
+            </div>
+            <p className="audit-body">{audit.explanation_zh}</p>
+            {audit.evidence_snippet && (
+              <details className="disclosure">
+                <summary><ChevronRight size={13} className="chev" aria-hidden />文献原文片段</summary>
+                <blockquote className="evidence">{audit.evidence_snippet}</blockquote>
+              </details>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  const disciplineInfo = DISCIPLINE_MAP[discipline] ?? DISCIPLINE_MAP.UNIVERSAL;
+  const flaggedPct = progress.total ? Math.round((diagnosis.summary.flagged / progress.total) * 100) : 0;
+  const selected = selectedSentenceIndex !== null ? allDiagnostics[selectedSentenceIndex] : undefined;
 
   return (
     <div className="app-container">
-      {/* Top Floating Glass Header */}
       <header className="header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, rgba(0, 229, 255, 0.2) 0%, rgba(99, 102, 241, 0.25) 100%)',
-            border: '1px solid var(--accent-cyan-glow)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 0 16px var(--accent-cyan-glow)'
-          }}>
-            <Sparkles size={20} color="var(--accent-cyan)" />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <h1 style={{ fontSize: '17px', fontWeight: '700', letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-                RuScholar Studio
-              </h1>
-              <span style={{
-                backgroundColor: 'rgba(0, 229, 255, 0.1)',
-                color: 'var(--accent-cyan)',
-                padding: '2px 8px',
-                borderRadius: '999px',
-                fontSize: '10px',
-                fontWeight: 700,
-                border: '1px solid rgba(0, 229, 255, 0.25)',
-                letterSpacing: '0.04em'
-              }}>
-                VAK / GOST 质检标准
-              </span>
+        <div className="brand">
+          <span className="monogram" aria-hidden>Rs</span>
+          <div className="brand-text">
+            <div className="brand-row">
+              <h1 className="brand-name">RuScholar Studio</h1>
+              <span className="tag tone-outline">ВАК · ГОСТ</span>
             </div>
-            <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', letterSpacing: '-0.01em' }}>
-              俄联邦学位论文自然化润色与多维真伪性核验工作台
-            </div>
+            <div className="brand-sub">俄语学位论文文风与引证质检工作台</div>
           </div>
         </div>
 
-        <div style={{ flex: 1 }} />
+        <div className="header-spacer" />
 
-        {/* Engine Controls & Cloud Key Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <select
-            value={engineType}
-            onChange={e => setEngineType(e.target.value as EngineType)}
-            disabled={isAnalyzing}
-            aria-label="推理引擎"
-            className="tech-select font-mono"
-            style={{ fontSize: '12px' }}
-          >
-            <option value="local">Local: Qwen3-8B-GGUF (本地)</option>
-            <option value="hybrid-pro">Hybrid: Local PPL + DeepSeek Pro</option>
-            <option value="hybrid-flash">Hybrid: Local PPL + deepseek-flash</option>
-            <option value="cloud-pro">Cloud: Pure DeepSeek Pro (纯云端)</option>
-            <option value="cloud-flash">Cloud: deepseek-flash (高速云端)</option>
-          </select>
+        <div className="header-controls">
+          <label className="field-inline">
+            <span className="visually-hidden">推理引擎</span>
+            <select value={engineType} onChange={e => setEngineType(e.target.value as EngineType)}
+              disabled={isAnalyzing} className="tech-select">
+              {(Object.keys(ENGINE_LABELS) as EngineType[]).map(k => <option key={k} value={k}>{ENGINE_LABELS[k]}</option>)}
+            </select>
+          </label>
 
           {engineType !== 'local' && (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                placeholder="Base URL"
-                value={baseUrl}
-                onChange={e => setBaseUrl(e.target.value)}
-                className="tech-input font-mono"
-                style={{ width: '170px', fontSize: '12px' }}
-              />
-              <input
-                type="password"
-                placeholder="API Key"
-                value={apiKey}
-                onChange={e => setApiKey(e.target.value)}
-                className="tech-input font-mono"
-                style={{ width: '140px', fontSize: '12px' }}
-              />
-            </div>
+            <>
+              <input type="text" aria-label="接口地址" placeholder="https://api.deepseek.com/v1" value={baseUrl}
+                onChange={e => setBaseUrl(e.target.value)} className="tech-input mono" style={{ width: 196 }} />
+              <input type="password" aria-label="API Key" placeholder="API Key（留空用 .env）" value={apiKey}
+                onChange={e => setApiKey(e.target.value)} className="tech-input mono" style={{ width: 168 }} />
+            </>
           )}
 
           {(engineType === 'local' || engineType.startsWith('hybrid')) && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {localModelStatus === 'exists' && (
-                <div style={{
-                  color: 'var(--accent-emerald)',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  backgroundColor: 'var(--accent-emerald-bg)',
-                  padding: '5px 12px',
-                  borderRadius: '999px',
-                  border: '1px solid rgba(16, 185, 129, 0.3)'
-                }}>
-                  <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: 'var(--accent-emerald)', borderRadius: '50%', boxShadow: '0 0 8px var(--accent-emerald)' }}></span>
-                  <span>Qwen3 引擎在线</span>
-                </div>
-              )}
+            <>
+              {localModelStatus === 'exists' && <span className="status-text"><i className="dot tone-good" />本地模型已加载</span>}
+              {localModelStatus === 'checking' && <span className="status-text"><i className="dot" />检查模型…</span>}
               {localModelStatus === 'missing' && (
-                <button
-                  onClick={downloadLocalModel}
-                  className="btn-primary"
-                  style={{ padding: '6px 14px', fontSize: '12px' }}
-                >
-                  <Cpu size={14} />
-                  下载本地模型
-                </button>
+                <button onClick={downloadLocalModel} className="btn-secondary">下载本地模型 · 5.9 GB</button>
               )}
               {localModelStatus === 'downloading' && (
-                <div style={{ color: 'var(--accent-cyan)', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>下载模型中:</span>
-                  <span className="font-mono" style={{ fontWeight: 'bold' }}>{Math.round(downloadProgress)}%</span>
-                </div>
+                <span className="status-text">下载模型 <span className="num">{Math.round(downloadProgress)}%</span></span>
               )}
-            </div>
+            </>
           )}
 
-          <button
-            onClick={toggleTheme}
-            className="btn-ghost"
-            style={{ padding: '8px', borderRadius: '50%' }}
-            title={theme === 'dark' ? "切换为明亮模式" : "切换为暗夜模式"}
-          >
-            {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
-          </button>
+          <span className="header-divider" aria-hidden />
 
-          <a
-            href="https://github.com/Tanue-Hou/RuScholar-Studio"
-            target="_blank"
-            rel="noreferrer"
-            className="btn-ghost font-mono"
-            style={{ textDecoration: 'none', fontSize: '12px' }}
-          >
-            <ExternalLink size={14} />
-            GitHub
+          <button onClick={toggleTheme} className="icon-btn" aria-label={theme === 'dark' ? '切换为浅色' : '切换为深色'}
+            title={theme === 'dark' ? '切换为浅色' : '切换为深色'}>
+            {theme === 'dark' ? <Sun size={16} strokeWidth={1.75} /> : <Moon size={16} strokeWidth={1.75} />}
+          </button>
+          <a href="https://github.com/Tanue-Hou/RuScholar-Studio" target="_blank" rel="noreferrer"
+            className="icon-btn" aria-label="GitHub 仓库" title="GitHub 仓库">
+            <ExternalLink size={16} strokeWidth={1.75} />
           </a>
 
-          {file && (
-            <div style={{ display: 'flex', gap: '8px' }}>
-              {isAnalyzing ? (
-                <>
-                  <button className="btn-primary" disabled style={{ opacity: 0.85 }}>
-                    <Activity size={14} className="pulse-fast" />
-                    <span>{diagnosis.phase === 'preparing' ? '正在准备质检…' : `质检中 ${progress.current}/${progress.total}`}</span>
-                  </button>
-                  <button
-                    onClick={stopAnalysis}
-                    className="btn-danger"
-                  >
-                    <Square size={13} />
-                    停止
-                  </button>
-                </>
-              ) : (
-                <button className="btn-primary" onClick={startAnalysis} disabled={uploading}>
-                  <Play size={14} />
-                  启动多维质检
-                </button>
-              )}
-            </div>
-          )}
+          {file && (isAnalyzing ? (
+            <>
+              <span className="status-text num">
+                {diagnosis.phase === 'preparing' ? '准备中…' : `${progress.current} / ${progress.total} 句`}
+              </span>
+              <button onClick={stopAnalysis} className="btn-secondary"><Square size={12} aria-hidden />停止</button>
+            </>
+          ) : (
+            <button className="btn-primary" onClick={startAnalysis} disabled={uploading}>
+              <Play size={13} aria-hidden />{diagnosis.phase === 'idle' ? '开始质检' : '重新质检'}
+            </button>
+          ))}
         </div>
       </header>
 
       {(uploadError || model.error || diagnosis.error || diagnosis.phase === 'stopped' || diagnosis.nlpBackend === 'fallback' || engineType !== 'local') && (
         <div className="studio-notices" aria-live="polite">
-          {(uploadError || model.error || diagnosis.error) && <p role="alert">{uploadError || model.error || diagnosis.error}</p>}
-          {diagnosis.phase === 'stopped' && <p>质检已停止，{progress.total ? `已完成 ${progress.current}/${progress.total} 句` : '尚无已完成的质检结果'}。可以重新启动完整质检。</p>}
-          {diagnosis.nlpBackend === 'fallback' && <p>俄语语言模型未就绪，词法指标为粗略估计；安装 spaCy 俄语模型后重启后端。</p>}
-          {engineType !== 'local' && <p>{engineType.startsWith('hybrid') ? '混合模式：PPL 在本地计算，待判定句子会发送到所选云端接口。' : '纯云端模式：句子会发送到所选接口，不加载本地模型。'}</p>}
+          {(uploadError || model.error || diagnosis.error) && <p role="alert" className="notice tone-critical">{uploadError || model.error || diagnosis.error}</p>}
+          {diagnosis.phase === 'stopped' && <p className="notice">质检已停止，{progress.total ? `已完成 ${progress.current} / ${progress.total} 句` : '尚无已完成的结果'}。可以重新开始完整质检。</p>}
+          {diagnosis.nlpBackend === 'fallback' && <p className="notice tone-warning">后端缺少 spaCy 俄语模型，名动比、被动语态与第二格链为粗略估计。安装 ru_core_news_sm 后重启后端。</p>}
+          {engineType !== 'local' && <p className="notice">{engineType.startsWith('hybrid') ? '混合模式：困惑度在本地计算，需要判定的句子会发送到所选云端接口。' : '云端模式：全部句子发送到所选接口，不计算困惑度。'}</p>}
         </div>
       )}
 
-      {/* Main Studio Viewport */}
       <main className="main-content">
-        {/* Left Column: Manuscript Reading Station */}
+        {/* Left: manuscript */}
         <div className="column-left">
           {!file ? (
             <div className="upload-zone-wrapper">
-              <div className="upload-zone" role="button" tabIndex={0} aria-label="导入俄语学术手稿"
-                aria-busy={uploading}
+              <div className="intro">
+                <div className="eyebrow">新建质检</div>
+                <h2 className="intro-title">导入一份俄语学术手稿</h2>
+                <p className="intro-text">
+                  逐句评估困惑度、名词化程度、被动语态与套话密度，并按文内引标回溯文献原文核验论点。每一项结论都附带数值、阈值与依据，不给出笼统的「AI 率」。
+                </p>
+              </div>
+
+              <div className="upload-zone" role="button" tabIndex={0} aria-label="导入俄语学术手稿" aria-busy={uploading}
                 onClick={() => { if (!uploading) document.getElementById('file-upload')?.click(); }}
                 onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !uploading) { e.preventDefault(); document.getElementById('file-upload')?.click(); } }}
                 onDragOver={e => e.preventDefault()}
                 onDrop={e => { e.preventDefault(); const dropped = e.dataTransfer.files[0]; if (dropped) void loadFile(dropped); }}
               >
-                <div className="upload-icon-halo">
-                  <Upload size={32} color="var(--accent-cyan)" />
-                </div>
-                <h2 style={{ fontSize: '20px', fontWeight: '700', letterSpacing: '-0.02em', marginBottom: '8px' }}>
-                  {uploading ? '正在读取手稿…' : '导入俄语学术手稿'}
-                </h2>
-                <p className="text-secondary" style={{ fontSize: '14px', maxWidth: '440px', textAlign: 'center', lineHeight: '1.5' }}>
-                  拖拽或点击上传俄文学位论文或期刊草稿 (支持 <strong>.docx</strong>, <strong>.pdf</strong>, <strong>.txt</strong> 格式)
-                </p>
-
-                <input
-                  id="file-upload"
-                  type="file"
-                  accept=".docx,.pdf,.txt"
-                  style={{ display: 'none' }}
-                  onChange={handleFileUpload}
-                />
+                <Upload size={22} strokeWidth={1.5} className="upload-icon" aria-hidden />
+                <div className="upload-title">{uploading ? '正在读取手稿…' : '选择或拖入手稿文件'}</div>
+                <div className="upload-hint">.docx · .pdf · .txt · 单个文件不超过 50 MB · 本地模式下全文不离开本机</div>
+                <input id="file-upload" type="file" accept=".docx,.pdf,.txt" style={{ display: 'none' }} onChange={handleFileUpload} />
               </div>
 
-              {/* Private Literature Corpus Configuration */}
-              <div
-                style={{
-                  marginTop: '24px',
-                  padding: '22px 26px',
-                  borderRadius: '16px',
-                  backgroundColor: 'var(--bg-surface-1)',
-                  border: '1px solid var(--border-subtle)',
-                  backdropFilter: 'blur(24px)',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  boxShadow: 'var(--shadow-card)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--accent-blue-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <BookOpen size={16} color="var(--accent-blue)" />
-                    </div>
-                    <div>
-                      <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                        本地文献全文核验库 (Corpus Reference Hub)
-                      </h3>
-                      <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                        选填：若未提供本地全文 PDF，系统将自动利用 OpenAlex 检索摘要进行证据真实性核实。
-                      </p>
-                    </div>
+              <section className="card library">
+                <div className="card-head">
+                  <h3 className="card-title">参考文献库</h3>
+                  <span className="card-meta">选填</span>
+                </div>
+                <p className="card-text">提供全文后，引用核验基于原文段落（BM25 检索）；未提供时按书目信息检索 OpenAlex 摘要。</p>
+                <div className="library-grid">
+                  <div className="library-cell">
+                    <div className="library-label">BibTeX 书目</div>
+                    <div className="library-value mono">{bibtexFile ? bibtexFile.name : '未选择 .bib'}</div>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => document.getElementById('bibtex-upload')?.click()}>
+                      {bibtexFile ? '更换文件' : '选择 .bib'}
+                    </button>
+                    <input id="bibtex-upload" type="file" accept=".bib" style={{ display: 'none' }}
+                      onChange={e => { if (e.target.files?.length) setBibtexFile(e.target.files[0]); }} />
+                  </div>
+                  <div className="library-cell">
+                    <div className="library-label">文献全文</div>
+                    <div className="library-value mono">{referenceFiles.length > 0 ? `已选 ${referenceFiles.length} 篇` : '未选择 PDF'}</div>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => document.getElementById('pdfs-upload')?.click()}>
+                      {referenceFiles.length > 0 ? '重新选择' : '批量导入 PDF'}
+                    </button>
+                    <input id="pdfs-upload" type="file" multiple accept=".pdf" style={{ display: 'none' }}
+                      onChange={e => { if (e.target.files?.length) setReferenceFiles(Array.from(e.target.files)); }} />
                   </div>
                 </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '16px' }}>
-                  {/* BibTeX Entry Card */}
-                  <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-card-inner)', border: '1px solid var(--border-subtle)', borderRadius: '10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>BibTeX 参考文献索引</div>
-                      <div className="font-mono" style={{ fontSize: '11px', color: 'var(--text-tertiary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        {bibtexFile ? bibtexFile.name : '尚未选择 (.bib)'}
-                      </div>
-                    </div>
-                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById('bibtex-upload')?.click()}
-                        className="btn-ghost font-mono"
-                        style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)' }}
-                      >
-                        {bibtexFile ? '替换文件' : '选择 .bib'}
-                      </button>
-                    </div>
-                    <input
-                      id="bibtex-upload"
-                      type="file"
-                      accept=".bib"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          setBibtexFile(e.target.files[0]);
-                        }
-                      }}
-                    />
-                  </div>
-
-                  {/* PDF Full-text Corpus Card */}
-                  <div style={{ padding: '12px 14px', backgroundColor: 'var(--bg-card-inner)', border: '1px solid var(--border-subtle)', borderRadius: '10px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '4px' }}>参考论文 PDF 全文集</div>
-                      <div className="font-mono" style={{ fontSize: '11px', color: 'var(--text-tertiary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                        {referenceFiles.length > 0 ? `已装载 ${referenceFiles.length} 篇参考论文` : '尚未选择 (.pdf 集合)'}
-                      </div>
-                    </div>
-                    <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById('pdfs-upload')?.click()}
-                        className="btn-ghost font-mono"
-                        style={{ fontSize: '11px', padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', color: 'var(--accent-cyan)' }}
-                      >
-                        {referenceFiles.length > 0 ? '重新选择' : '批量导入 PDF'}
-                      </button>
-                    </div>
-                    <input
-                      id="pdfs-upload"
-                      type="file"
-                      multiple
-                      accept=".pdf"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          setReferenceFiles(Array.from(e.target.files));
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {referencesUploadStatus !== 'none' && (
-                  <div style={{ marginTop: '14px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {referencesUploadStatus === 'uploading' && <span style={{ color: 'var(--accent-cyan)' }}>⏳ 正在建立语义检索索引与文献库注册...</span>}
-                    {referencesUploadStatus === 'metadata' && <span style={{ color: 'var(--accent-blue)' }}>已注册书目信息；引文证据使用 OpenAlex 摘要</span>}
-                    {referencesUploadStatus === 'indexed' && <span style={{ color: 'var(--accent-emerald)' }}>✅ 文献库注册与 BM25 索引构建完毕</span>}
-                    {referencesUploadStatus === 'failed' && <span style={{ color: 'var(--accent-rose)' }}>❌ 文献库注册失败，将自动降级至在线检索模式</span>}
-                  </div>
-                )}
-              </div>
+                <p className="card-foot">文件名即引用键，例如 <span className="mono">[Smith2020].pdf</span> 对应文内 <span className="mono">[Smith2020]</span>。</p>
+              </section>
             </div>
           ) : (
             <div className="document-viewer">
-              {/* Document Status Header Bar */}
-              <div
-                style={{
-                  marginBottom: '24px',
-                  padding: '14px 20px',
-                  borderRadius: '12px',
-                  backgroundColor: 'var(--bg-surface-1)',
-                  border: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  boxShadow: 'var(--shadow-card)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <FileText size={18} color="var(--accent-cyan)" />
-                  <div>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {file.name}
-                    </span>
-                    <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginLeft: '12px' }}>
-                      文献核验: {referencesUploadStatus === 'indexed' ? (
-                        <strong style={{ color: 'var(--accent-emerald)' }}>本地全文证据库 ({referenceFiles.length} 篇)</strong>
-                      ) : referencesUploadStatus === 'metadata' ? (
-                        <strong style={{ color: 'var(--accent-blue)' }}>书目信息与 OpenAlex 摘要</strong>
-                      ) : referencesUploadStatus === 'uploading' ? (
-                        <strong style={{ color: 'var(--accent-cyan)' }}>正在注册参考文献…</strong>
-                      ) : referencesUploadStatus === 'none' && (bibtexFile || referenceFiles.length > 0) ? (
-                        <strong style={{ color: 'var(--text-secondary)' }}>文献已选，启动后注册</strong>
-                      ) : (
-                        <strong style={{ color: 'var(--accent-blue)' }}>{referencesUploadStatus === 'failed' ? '文献注册失败，使用在线摘要补位' : '在线补位模式 (OpenAlex 摘要核验)'}</strong>
-                      )}
-                    </span>
-                  </div>
+              <div className="doc-header">
+                <FileText size={16} strokeWidth={1.75} className="doc-icon" aria-hidden />
+                <div className="doc-title-block">
+                  <div className="doc-title">{file.name}</div>
+                  <dl className="doc-stats">
+                    <div><dt>字符</dt><dd className="num">{int(docStats.characters)}</dd></div>
+                    <div><dt>词</dt><dd className="num">{int(docStats.words)}</dd></div>
+                    <div><dt>句</dt><dd className="num">{progress.total ? int(progress.total) : '—'}</dd></div>
+                    <div><dt>文内引标</dt><dd className="num">{int(docStats.citations)}</dd></div>
+                    <div><dt>文献核验</dt><dd>{referenceMode}</dd></div>
+                  </dl>
                 </div>
-
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={replaceManuscript}
-                    className="btn-ghost"
-                    style={{ fontSize: '12px', padding: '5px 12px' }}
-                  >
-                    <RotateCcw size={13} />
-                    重新导入手稿
-                  </button>
-                </div>
+                <button onClick={replaceManuscript} className="btn-ghost"><RotateCcw size={13} aria-hidden />重新导入</button>
               </div>
 
-              {/* Manuscript Reading Canvas */}
-              <div className="document-canvas">
+              {progress.current > 0 && (
+                <div className="doc-legend" aria-hidden>
+                  <span><i className="legend-line flagged" />需修改</span>
+                  <span><i className="legend-line" />通过</span>
+                  <span><span className="legend-num is-low">7.4</span>困惑度标注，着色表示低于下限 {calib.ppl_low}</span>
+                  <span className="doc-legend-note">点击句子查看指标与改写建议</span>
+                </div>
+              )}
+
+              <div className="document-canvas" lang="ru">
                 {progress.current === 0 ? (
-                  <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>{documentText}</div>
+                  <div className="manuscript-plain">{documentText}</div>
                 ) : (
                   sentences.map((s, idx) => (
-                    <span
-                      key={idx}
-                      ref={el => { sentenceRefs.current[idx] = el; }}
-                      className={`sentence ${s.status} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
-                      title={s.status}
-                      onClick={() => {
-                        setSelectedSentenceIndex(idx);
-                        rightColumnRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                      }}
-                    >
-                      {s.text}
-                      {s.ppl !== undefined && s.ppl !== null && (
-                        <sub
-                          className="ppl-tag font-mono"
-                          style={{
-                            color: s.ppl < 15 ? 'var(--accent-rose)' : s.ppl < 25 ? 'var(--accent-amber)' : 'var(--text-tertiary)',
-                          }}
-                        >
-                          PPL {s.ppl}
-                        </sub>
-                      )}
+                    <span key={idx}>
+                      <span ref={el => { sentenceRefs.current[idx] = el; }}
+                        className={`sentence ${s.status} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
+                        onClick={() => s.text && selectSentence(idx)}>
+                        {s.text}
+                      </span>
+                      {typeof s.ppl === 'number' && <sup className={`ppl-tag ${pplClass(s.ppl)}`} title="困惑度 PPL">{s.ppl}</sup>}
                       {' '}
                     </span>
                   ))
@@ -684,320 +425,236 @@ function App() {
           )}
         </div>
 
-        {/* Right Column: High-Tech Telemetry & Stream */}
+        {/* Right: findings */}
         <div className="column-right" ref={rightColumnRef}>
           <div className="stream-container">
-            {/* Academic Discipline Capsule */}
-            {file && (
-              <div className="glass-card" style={{
-                marginBottom: '4px',
-                border: `1px solid ${DISCIPLINE_MAP[discipline]?.color || 'var(--border-subtle)'}`,
-                background: 'linear-gradient(180deg, var(--bg-surface-1) 0%, var(--bg-card-inner) 100%)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <DisciplineIcon size={16} color={DISCIPLINE_MAP[discipline]?.color || 'var(--accent-cyan)'} />
-                    <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
-                      学科领域智能归类 (Academic Domain)
-                    </span>
-                  </div>
-                  <span style={{
-                    fontSize: '11px',
-                    padding: '2px 8px',
-                    borderRadius: '999px',
-                    backgroundColor: 'rgba(255,255,255,0.06)',
-                    color: DISCIPLINE_MAP[discipline]?.color || 'var(--text-primary)',
-                    fontWeight: 600,
-                    fontFamily: 'var(--font-mono)'
-                  }}>
-                    {discipline}
-                  </span>
-                </div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                  {DISCIPLINE_MAP[discipline]?.zh || '通用学术与跨学科领域'}
-                </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                  {DISCIPLINE_MAP[discipline]?.en || 'Universal Academic Domain'}
-                </div>
-              </div>
-            )}
-
-            {/* Global Telemetry & Risk Matrix */}
-            {progress.total > 0 && (
-              <div className="glass-card" style={{ marginBottom: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '16px' }}>
-                  <div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-                      总体风格风险率 (Style Risk)
-                    </div>
-                    <div className="font-mono" style={{ fontSize: '24px', fontWeight: 800, marginTop: '2px', color: stats.flaggedCount > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)' }}>
-                      {Math.round((stats.flaggedCount / progress.total) * 100)}%
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-                      平均困惑度 (Avg PPL)
-                    </div>
-                    <div className="font-mono" style={{ fontSize: '24px', fontWeight: 800, marginTop: '2px', color: 'var(--accent-cyan)' }}>
-                      {stats.pplCount > 0 ? (stats.totalPPL / stats.pplCount).toFixed(1) : '-'}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4 Multi-Channel Risk Gauges */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--border-subtle)', paddingTop: '14px' }}>
-                  {/* 1. Predictability */}
-                  <div>
-                    <div className="telemetry-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>可预测性特征 (Predictability Risk)</span>
-                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-cyan)' }}>{runningRisks.predictability}%</span>
-                    </div>
-                    <div className="telemetry-track">
-                      <div className="telemetry-fill" style={{ width: `${runningRisks.predictability}%`, background: 'linear-gradient(90deg, #00B4D8 0%, #00E5FF 100%)' }} />
-                    </div>
-                  </div>
-
-                  {/* 2. Uniformity */}
-                  <div>
-                    <div className="telemetry-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>句式均匀度 (Uniformity Risk)</span>
-                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-violet)' }}>{runningRisks.uniformity}%</span>
-                    </div>
-                    <div className="telemetry-track">
-                      <div className="telemetry-fill" style={{ width: `${runningRisks.uniformity}%`, background: 'linear-gradient(90deg, #8B5CF6 0%, #C084FC 100%)' }} />
-                    </div>
-                  </div>
-
-                  {/* 3. Translationese */}
-                  <div>
-                    <div className="telemetry-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>机器翻译腔 (Translationese Risk)</span>
-                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>{runningRisks.translationese}%</span>
-                    </div>
-                    <div className="telemetry-track">
-                      <div className="telemetry-fill" style={{ width: `${runningRisks.translationese}%`, background: 'linear-gradient(90deg, #F59E0B 0%, #FBBF24 100%)' }} />
-                    </div>
-                  </div>
-
-                  {/* 4. Redundancy */}
-                  <div>
-                    <div className="telemetry-row">
-                      <span style={{ color: 'var(--text-secondary)' }}>语义冗余度 (Redundancy Risk)</span>
-                      <span className="font-mono" style={{ fontWeight: 700, color: 'var(--accent-rose)' }}>{runningRisks.redundancy}%</span>
-                    </div>
-                    <div className="telemetry-track">
-                      <div className="telemetry-fill" style={{ width: `${runningRisks.redundancy}%`, background: 'linear-gradient(90deg, #E11D48 0%, #FB7185 100%)' }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {!file && (
-              <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '80px', padding: '0 20px' }}>
-                <Zap size={36} color="var(--text-tertiary)" style={{ opacity: 0.3, margin: '0 auto 16px auto' }} />
-                <h4 style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '6px' }}>质检控制台就绪</h4>
-                <p style={{ fontSize: '12px', lineHeight: '1.6' }}>在左侧导入手稿后，此处将流式展示每一句话的 PPL 困惑度、词法结构指标与大模型推导链条。</p>
-              </div>
+              <section className="card">
+                <div className="card-head"><h3 className="card-title">检测项目</h3><span className="card-meta">6 项</span></div>
+                <dl className="check-list">
+                  {CHECKS.map(([name, desc]) => (
+                    <div key={name}><dt>{name}</dt><dd>{desc}</dd></div>
+                  ))}
+                </dl>
+              </section>
             )}
 
-            {/* Selected Sentence Inspector */}
             {file && (
-              <div className="glass-card" style={{
-                marginBottom: '16px',
-                border: '1px solid var(--accent-cyan)',
-                background: 'linear-gradient(180deg, rgba(0, 229, 255, 0.05) 0%, var(--bg-surface-1) 100%)',
-                boxShadow: '0 0 20px var(--accent-cyan-glow)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Activity size={16} color="var(--accent-cyan)" />
-                    <span style={{ fontWeight: 700, color: 'var(--accent-cyan)', fontSize: '13px', letterSpacing: '0.02em' }}>
-                      风格透视控制台 (Sentence Inspector)
-                    </span>
+              <section className="card">
+                <div className="card-head">
+                  <h3 className="card-title">学科归类</h3>
+                  <span className="card-meta mono">{discipline}</span>
+                </div>
+                <div className="discipline-name">{disciplineInfo.zh}</div>
+                <div className="discipline-ru" lang="ru">{disciplineInfo.ru}</div>
+                <dl className="threshold-row">
+                  <div><dt>困惑度区间</dt><dd className="num">{calib.ppl_low}–{calib.ppl_high}</dd></div>
+                  <div><dt>名动比上限</dt><dd className="num">{fmt(calib.nv_ratio_max)}</dd></div>
+                  <div><dt>被动语态上限</dt><dd className="num">{calib.passive_max ?? '—'}</dd></div>
+                </dl>
+                {!diagnosis.calibration && <p className="card-foot">阈值为默认值；开始质检后显示本学科校准值。</p>}
+              </section>
+            )}
+
+            {progress.total > 0 && (
+              <section className="card">
+                <div className="card-head">
+                  <h3 className="card-title">概览</h3>
+                  <span className="card-meta num">{progress.current} / {progress.total} 句{isAnalyzing ? ' · 分析中' : ''}</span>
+                </div>
+                {isAnalyzing && (
+                  <div className="progress" role="progressbar" aria-label="质检进度" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.current}>
+                    <div className="progress-fill" style={{ transform: `scaleX(${progress.total ? progress.current / progress.total : 0})` }} />
                   </div>
-                  {selectedSentenceIndex !== null && (
-                    <button
-                      onClick={() => setSelectedSentenceIndex(null)}
-                      className="btn-ghost"
-                      style={{ fontSize: '11px', padding: '2px 8px' }}
-                    >
-                      取消选定
-                    </button>
-                  )}
+                )}
+                <div className="kpi-grid">
+                  <div className="kpi">
+                    <div className="kpi-label">需修改</div>
+                    <div className={`kpi-value ${flaggedPct >= 30 ? 'tone-critical' : ''}`}>{flaggedPct}<span className="kpi-unit">%</span></div>
+                    <div className="kpi-sub num">{diagnosis.summary.flagged} / {progress.total} 句</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-label">平均困惑度</div>
+                    <div className="kpi-value">{fmt(ppl.mean)}</div>
+                    <div className="kpi-sub num">中位 {fmt(ppl.median)} · 范围 {fmt(ppl.min, 0)}–{fmt(ppl.max, 0)}</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-label">低于下限</div>
+                    <div className={`kpi-value ${ppl.belowLow ? 'tone-critical' : ''}`}>{ppl.count ? ppl.belowLow : '—'}</div>
+                    <div className="kpi-sub num">PPL &lt; {calib.ppl_low} · 高于上限 {ppl.count ? ppl.aboveHigh : '—'}</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-label">引文问题</div>
+                    <div className={`kpi-value ${integrityWarnings.length ? 'tone-warning' : ''}`}>
+                      {integrityWarnings.length + completed.filter(d => d.status === 'flagged' && (d.issue_type === 'citation_gap' || d.issue_type === 'citation_contradiction')).length}
+                    </div>
+                    <div className="kpi-sub num">书目缺失 {integrityWarnings.length} · 逐句 {completed.filter(d => d.citation_audit?.length).length} 处核验</div>
+                  </div>
+                </div>
+                {ppl.count > 0 ? (
+                  <PplStrip results={diagnosis.results} calibration={calib} selected={selectedSentenceIndex}
+                    onSelect={i => selectSentence(i, true)} issueTitle={issueTitle} />
+                ) : (
+                  progress.current > 0 && <p className="card-foot">当前为云端模式，不计算困惑度分布。</p>
+                )}
+              </section>
+            )}
+
+            {progress.total > 0 && (
+              <section className="card">
+                <div className="card-head"><h3 className="card-title">文风风险</h3><span className="card-meta">全文累计</span></div>
+                <ul className="risk-list">
+                  {RISK_ROWS.map(r => {
+                    const v = runningRisks[r.key];
+                    const level = riskLevel(v);
+                    return (
+                      <li key={r.key} className="risk-row">
+                        <div className="risk-name">{r.label}<span className="risk-hint">{r.hint}</span></div>
+                        <div className={`risk-value num ${level === '高' ? 'tone-critical' : ''}`}>{v}%<span className="risk-level">{level}</span></div>
+                        <div className="telemetry-track"><div className={`telemetry-fill ${level === '高' ? 'high' : level === '中' ? 'mid' : ''}`} style={{ transform: `scaleX(${v / 100})` }} /></div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="split">
+                  <div>
+                    <div className="sub-title">问题构成</div>
+                    {breakdown.length ? (
+                      <ul className="breakdown">
+                        {breakdown.map(b => (
+                          <li key={b.type}>
+                            <span><i className={`dot tone-${issueTone(b.type)}`} />{issueTitle(b.type)}</span>
+                            <span className="num">{b.count}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : <p className="card-foot">暂无需修改的句子。</p>}
+                  </div>
+                  <div>
+                    <div className="sub-title">词法汇总</div>
+                    <dl className="facts compact">
+                      <div><dt>平均名动比</dt><dd className="num">{fmt(lexical.meanNv, 2)}</dd></div>
+                      <div><dt>超出上限</dt><dd className="num">{lexical.overNv} 句</dd></div>
+                      <div><dt>被动语态</dt><dd className="num">{lexical.passive}</dd></div>
+                      <div><dt>第二格链</dt><dd className="num">{lexical.genitiveChains}</dd></div>
+                      <div><dt>套话命中</dt><dd className="num">{lexical.cliches}</dd></div>
+                      <div><dt>连接词</dt><dd className="num">{lexical.connectors}</dd></div>
+                    </dl>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {file && (
+              <section className="card inspector" ref={inspectorRef}>
+                <div className="card-head">
+                  <h3 className="card-title">逐句详情</h3>
+                  {selectedSentenceIndex !== null ? (
+                    <span className="card-meta num">
+                      第 {selectedSentenceIndex + 1} / {progress.total} 句
+                      <button onClick={() => setSelectedSentenceIndex(null)} className="link-btn">取消选定</button>
+                    </span>
+                  ) : <span className="card-meta">未选定</span>}
                 </div>
 
                 {selectedSentenceIndex === null ? (
-                  <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', textAlign: 'center', padding: '16px 0', lineHeight: '1.6' }}>
-                    💡 提示：点击左侧手稿中的任意句子，在此透视其深层词法统计、大模型反思推断以及润色重构建议。
-                  </p>
+                  <p className="card-text muted">点击左侧手稿中的句子，或右侧分布图中的柱，查看该句的指标、诊断依据与改写建议。</p>
+                ) : !selected ? (
+                  <p className="card-text muted">这一句还在分析，结果出来后显示在这里。</p>
                 ) : (
-                  <div>
-                    {allDiagnostics[selectedSentenceIndex] ? (
-                      <div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '12px', lineHeight: '1.6', background: 'var(--bg-card-inner)', padding: '12px 14px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                          "{allDiagnostics[selectedSentenceIndex].text}"
-                        </div>
+                  <>
+                    <div className="verdict-row">
+                      <span className={`tag tone-${selected.status === 'flagged' ? issueTone(selected.issue_type) : 'good'}`}>
+                        {selected.status === 'flagged' ? issueTitle(selected.issue_type) : selected.status === 'early_exit' ? '通过 · 快速判定' : '通过'}
+                      </span>
+                      {selected.severity && <span className="verdict-sev">严重度 {selected.severity === 'high' ? '高' : selected.severity === 'medium' ? '中' : '低'}</span>}
+                    </div>
+                    <blockquote className="quote" lang="ru">{selected.text}</blockquote>
 
-                        <div style={{ background: 'var(--bg-card-inner)', borderRadius: '10px', padding: '14px', fontSize: '12px', border: '1px solid var(--border-subtle)' }}>
-                          <div className="metric-row">
-                            <span className="text-secondary font-mono">PPL (Perplexity 困惑度)</span>
-                            <span className="metric-value font-mono" style={{
-                              color: allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 15 ? 'var(--accent-rose)' : allDiagnostics[selectedSentenceIndex].ppl && allDiagnostics[selectedSentenceIndex].ppl! < 25 ? 'var(--accent-amber)' : 'var(--accent-emerald)',
-                              fontWeight: 700,
-                              fontSize: '13px'
-                            }}>
-                              {allDiagnostics[selectedSentenceIndex].ppl !== null ? allDiagnostics[selectedSentenceIndex].ppl : '云端纯推理'}
-                            </span>
-                          </div>
+                    <table className="metric-table">
+                      <thead><tr><th>指标</th><th>本句</th><th>本学科阈值</th></tr></thead>
+                      <tbody>
+                        <tr>
+                          <td>困惑度 PPL</td>
+                          <td className={`num ${pplClass(selected.ppl)}`}>{typeof selected.ppl === 'number' ? selected.ppl : '未计算'}</td>
+                          <td className="num">{calib.ppl_low}–{calib.ppl_high}</td>
+                        </tr>
+                        {selected.metrics && <>
+                          <tr><td>名词 / 动词比</td><td className={`num ${selected.metrics.nv_ratio > calib.nv_ratio_max ? 'is-low' : ''}`}>{selected.metrics.nv_ratio}</td><td className="num">≤ {fmt(calib.nv_ratio_max)}</td></tr>
+                          <tr><td>被动语态</td><td className={`num ${calib.passive_max != null && selected.metrics.passive_count > calib.passive_max ? 'is-low' : ''}`}>{selected.metrics.passive_count}</td><td className="num">{calib.passive_max != null ? `≤ ${calib.passive_max}` : '—'}</td></tr>
+                          <tr><td>第二格链</td><td className="num">{selected.metrics.genitive_chains_count}</td><td className="num">0 为佳</td></tr>
+                          <tr><td>学术套话</td><td className="num">{selected.metrics.cliches_count}</td><td className="num">0 为佳</td></tr>
+                          <tr><td>连接词</td><td className="num">{selected.metrics.connectors_count ?? '—'}</td><td className="num">—</td></tr>
+                        </>}
+                      </tbody>
+                    </table>
 
-                          <div className="metric-row" style={{ marginTop: '8px' }}>
-                            <span className="text-secondary">裁定状态 (Status)</span>
-                            <span style={{
-                              color: allDiagnostics[selectedSentenceIndex].status === 'flagged' ? 'var(--accent-rose)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? 'var(--accent-cyan)' : 'var(--accent-emerald)',
-                              fontWeight: 700
-                            }}>
-                              {allDiagnostics[selectedSentenceIndex].status === 'flagged' ? '● 存在风格异状 (Flagged)' : allDiagnostics[selectedSentenceIndex].status === 'early_exit' ? '✓ 安全通过 (Early Exit)' : '✓ 专家标准通过 (Passed)'}
-                            </span>
-                          </div>
-
-                          {allDiagnostics[selectedSentenceIndex].metrics && (
-                            <div style={{ marginTop: '12px', padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                <div>名/动比率: <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.nv_ratio}</strong></div>
-                                <div>被动语态频次: <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.passive_count}</strong></div>
-                                <div>第二格长链数: <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.genitive_chains_count}</strong></div>
-                                <div>学术套话命中: <strong className="font-mono" style={{ color: 'var(--text-primary)' }}>{allDiagnostics[selectedSentenceIndex].metrics?.cliches_count}</strong></div>
-                              </div>
-                            </div>
-                          )}
-
-                          {allDiagnostics[selectedSentenceIndex].think && (
-                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
-                              <details style={{ cursor: 'pointer' }}>
-                                <summary style={{ color: 'var(--text-secondary)', fontSize: '11px', outline: 'none', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                  <ChevronRight size={13} />
-                                  <span>模型诊断思维链 (Reasoning Trace)</span>
-                                </summary>
-                                <div className="terminal-block">
-                                  {allDiagnostics[selectedSentenceIndex].think}
-                                </div>
-                              </details>
-                            </div>
-                          )}
-
-                          {allDiagnostics[selectedSentenceIndex].explanation && (
-                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
-                              <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '4px' }}>
-                                异状成因剖析
-                              </div>
-                              <p style={{ color: allDiagnostics[selectedSentenceIndex].issue_type === 'json_parse_error' ? 'var(--accent-rose)' : 'var(--accent-amber)', lineHeight: '1.5' }}>
-                                {allDiagnostics[selectedSentenceIndex].explanation}
-                              </p>
-                            </div>
-                          )}
-
-                          {allDiagnostics[selectedSentenceIndex].suggestion && allDiagnostics[selectedSentenceIndex].suggestion !== 'N/A' && allDiagnostics[selectedSentenceIndex].suggestion !== '-' && (
-                            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent-emerald)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                  <Sparkles size={13} />
-                                  <span>学界标准改写建议 (Revision Suggestion)</span>
-                                </div>
-                                <button
-                                  onClick={() => copyToClipboard(allDiagnostics[selectedSentenceIndex].suggestion || '', `sugg-${selectedSentenceIndex}`)}
-                                  className="btn-ghost"
-                                  style={{ padding: '2px 8px', fontSize: '11px', borderRadius: '4px' }}
-                                >
-                                  {copiedKey === `sugg-${selectedSentenceIndex}` ? (
-                                    <>
-                                      <Check size={12} color="var(--accent-emerald)" />
-                                      <span style={{ color: 'var(--accent-emerald)' }}>已复制</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy size={12} />
-                                      <span>复制</span>
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                              <div style={{
-                                color: 'var(--accent-emerald)',
-                                fontWeight: 500,
-                                lineHeight: '1.5',
-                                padding: '8px 10px',
-                                background: 'var(--accent-emerald-bg)',
-                                borderRadius: '6px',
-                                border: '1px solid rgba(16, 185, 129, 0.2)'
-                              }}>
-                                {allDiagnostics[selectedSentenceIndex].suggestion}
-                              </div>
-                            </div>
-                          )}
-
-                          {renderCitationAudit(allDiagnostics[selectedSentenceIndex])}
-                        </div>
+                    {selected.explanation && (
+                      <div className="block">
+                        <div className="sub-title">诊断依据</div>
+                        <p className="block-text">{selected.explanation}</p>
                       </div>
-                    ) : (
-                      <p style={{ color: 'var(--text-tertiary)', fontSize: '12px', textAlign: 'center', padding: '10px 0' }}>
-                        句段选中，正在等待诊断流反馈...
-                      </p>
                     )}
-                  </div>
+
+                    {selected.suggestion && selected.suggestion !== 'N/A' && selected.suggestion !== '-' && selected.status === 'flagged' && (
+                      <div className="block">
+                        <div className="block-head">
+                          <div className="sub-title">改写建议</div>
+                          <button onClick={() => copyToClipboard(selected.suggestion || '', `sugg-${selectedSentenceIndex}`)} className="link-btn">
+                            {copiedKey === `sugg-${selectedSentenceIndex}` ? <><Check size={12} aria-hidden />已复制</> : <><Copy size={12} aria-hidden />复制</>}
+                          </button>
+                        </div>
+                        <p className="suggestion" lang="ru">{selected.suggestion}</p>
+                      </div>
+                    )}
+
+                    {selected.citation_audit && selected.citation_audit.length > 0 && (
+                      <div className="block">
+                        <div className="sub-title">引用核验 · {selected.citation_audit.length} 条</div>
+                        {renderAuditList(selected.citation_audit)}
+                      </div>
+                    )}
+
+                    {selected.think && (
+                      <details className="disclosure block">
+                        <summary><ChevronRight size={13} className="chev" aria-hidden />模型推理过程</summary>
+                        <div className="terminal-block">{selected.think}</div>
+                      </details>
+                    )}
+                  </>
                 )}
-              </div>
+              </section>
             )}
 
-            {/* Filter Tabs & Diagnostic Stream */}
             {(() => {
-              const sortedDiagnostics = Object.values(allDiagnostics).sort((a, b) => a.index - b.index);
+              const sortedDiagnostics = [...completed].sort((a, b) => a.index - b.index);
               const passedCount = sortedDiagnostics.filter(d => d.status !== 'flagged').length;
               const aiCount = sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type === 'ai_generated_suspicion').length;
               const styleCount = sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type !== 'ai_generated_suspicion' && d.issue_type !== 'citation_gap' && d.issue_type !== 'citation_contradiction').length;
               const sentenceIntegrityCount = sortedDiagnostics.filter(d => d.status === 'flagged' && (d.issue_type === 'citation_gap' || d.issue_type === 'citation_contradiction')).length;
               const integrityCount = integrityWarnings.length + sentenceIntegrityCount;
+              const tabs = [
+                ['all', '全部', sortedDiagnostics.length + integrityWarnings.length],
+                ['ai', 'AI 特征', aiCount],
+                ['flagged', '文风', styleCount],
+                ['integrity', '引文', integrityCount],
+                ['passed', '通过', passedCount],
+              ] as const;
 
               return (
                 <>
                   {file && progress.total > 0 && (
                     <div className="tabs-row">
-                      <div className="tabs-container">
-                        <button
-                          className={`tab-btn ${activeTab === 'all' ? 'active' : ''}`}
-                          onClick={() => setActiveTab('all')}
-                        >
-                          全部 ({sortedDiagnostics.length + integrityWarnings.length})
-                        </button>
-                        <button
-                          className={`tab-btn ${activeTab === 'passed' ? 'active' : ''}`}
-                          onClick={() => setActiveTab('passed')}
-                        >
-                          无风险 ({passedCount})
-                        </button>
-                        <button
-                          className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
-                          onClick={() => setActiveTab('ai')}
-                        >
-                          AI特征 ({aiCount})
-                        </button>
-                        <button
-                          className={`tab-btn ${activeTab === 'flagged' ? 'active' : ''}`}
-                          onClick={() => setActiveTab('flagged')}
-                        >
-                          学术套话 ({styleCount})
-                        </button>
-                        <button
-                          className={`tab-btn ${activeTab === 'integrity' ? 'active' : ''}`}
-                          onClick={() => setActiveTab('integrity')}
-                        >
-                          引文冲突 ({integrityCount})
-                        </button>
+                      <div className="tabs-container" role="group" aria-label="筛选诊断结果">
+                        {tabs.map(([key, label, count]) => (
+                          <button key={key} className={`tab-btn ${activeTab === key ? 'active' : ''}`} aria-pressed={activeTab === key} onClick={() => setActiveTab(key)}>
+                            {label}<span className="tab-count num">{count}</span>
+                          </button>
+                        ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Render Diagnostic Items */}
                   {sortedDiagnostics
                     .filter(diag => {
                       if (activeTab === 'all') return true;
@@ -1007,134 +664,76 @@ function App() {
                       if (activeTab === 'integrity') return diag.status === 'flagged' && (diag.issue_type === 'citation_gap' || diag.issue_type === 'citation_contradiction');
                       return true;
                     })
-                    .map((diag) => {
+                    .map(diag => {
                       const isFlagged = diag.status === 'flagged';
-                      const issueInfo = ISSUE_TITLE_MAP[diag.issue_type || ''] || {
-                        title: "学术风格提示 (Style Notice)",
-                        color: "var(--accent-amber)",
-                        bg: "var(--accent-amber-bg)"
-                      };
-                      const cardAccent = !isFlagged ? 'var(--accent-emerald)' : issueInfo.color;
-
+                      const tone = isFlagged ? issueTone(diag.issue_type) : 'good';
                       return (
-                        <div
-                          key={diag.index}
-                          className="diag-card slide-in"
-                          onClick={() => { scrollToSentence(diag.index); setSelectedSentenceIndex(diag.index); }}
-                          style={{
-                            '--card-accent': cardAccent,
-                            '--card-accent-glow': isFlagged ? 'rgba(244, 63, 94, 0.2)' : 'rgba(16, 185, 129, 0.2)'
-                          } as React.CSSProperties}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                            <div className="card-header" style={{ color: isFlagged ? issueInfo.color : 'var(--accent-emerald)', margin: 0 }}>
-                              {isFlagged ? (
-                                <>
-                                  <AlertCircle size={15} color={issueInfo.color} />
-                                  <span>{issueInfo.title}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle2 size={15} color="var(--accent-emerald)" />
-                                  <span>学界规范通过 (Clean Scholastic Style)</span>
-                                </>
-                              )}
+                        <article key={diag.index} className={`diag-card tone-${tone} ${selectedSentenceIndex === diag.index ? 'is-selected' : ''}`}
+                          onClick={() => selectSentence(diag.index, true)}>
+                          <div className="diag-head">
+                            <span className="diag-index mono">#{String(diag.index + 1).padStart(2, '0')}</span>
+                            <span className="diag-title">{isFlagged ? issueTitle(diag.issue_type) : diag.status === 'early_exit' ? '通过 · 快速判定' : '通过'}</span>
+                            <span className={`diag-ppl num ${pplClass(diag.ppl)}`}>{typeof diag.ppl === 'number' ? `PPL ${diag.ppl}` : 'PPL —'}</span>
+                          </div>
+                          <p className="diag-text" lang="ru">{diag.text.length > 140 ? `${diag.text.substring(0, 140)}…` : diag.text}</p>
+                          {diag.metrics && (
+                            <div className="diag-metrics num">
+                              <span>名动比 {diag.metrics.nv_ratio}</span>
+                              <span>被动 {diag.metrics.passive_count}</span>
+                              <span>属格链 {diag.metrics.genitive_chains_count}</span>
+                              <span>套话 {diag.metrics.cliches_count}</span>
+                              {diag.citation_audit?.length ? <span>引用核验 {diag.citation_audit.length}</span> : null}
                             </div>
-
-                            <span className="font-mono" style={{
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              color: diag.ppl && diag.ppl < 15 ? 'var(--accent-rose)' : diag.ppl && diag.ppl < 25 ? 'var(--accent-amber)' : 'var(--accent-emerald)',
-                              backgroundColor: 'rgba(0,0,0,0.3)',
-                              padding: '2px 6px',
-                              borderRadius: '4px'
-                            }}>
-                              {diag.ppl !== null ? `PPL ${diag.ppl}` : 'PPL -'}
-                            </span>
-                          </div>
-
-                          <p style={{ fontSize: '13px', color: 'var(--text-primary)', marginBottom: '10px', lineHeight: '1.5' }}>
-                            "{diag.text.substring(0, 85)}{diag.text.length > 85 ? '...' : ''}"
-                          </p>
-
-                          <div style={{ background: 'var(--bg-card-inner)', borderRadius: '8px', padding: '10px 12px', fontSize: '12px', border: '1px solid var(--border-subtle)' }}>
-                            {diag.explanation && (
-                              <div style={{ marginBottom: '6px' }}>
-                                <p style={{ color: isFlagged ? 'var(--text-secondary)' : 'var(--accent-emerald)', lineHeight: '1.4' }}>
-                                  {diag.explanation}
-                                </p>
-                              </div>
-                            )}
-
-                            {diag.suggestion && diag.suggestion !== 'N/A' && diag.suggestion !== '-' && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--accent-emerald)', fontWeight: 600, fontSize: '11px', marginBottom: '2px' }}>
-                                  <Sparkles size={12} />
-                                  <span>建议改写:</span>
-                                </div>
-                                <p style={{ color: 'var(--accent-emerald)', fontWeight: 500, fontSize: '12px' }}>
-                                  {diag.suggestion}
-                                </p>
-                              </div>
-                            )}
-
-                            {diag.think && (
-                              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-subtle)' }}>
-                                <details style={{ cursor: 'pointer' }} onClick={(e) => e.stopPropagation()}>
-                                  <summary style={{ color: 'var(--text-tertiary)', outline: 'none', userSelect: 'none', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <ChevronRight size={12} />
-                                    <span>展开模型思考推断 (Think Chain)</span>
-                                  </summary>
-                                  <div className="terminal-block">
-                                    {diag.think}
-                                  </div>
-                                </details>
-                              </div>
-                            )}
-
-                            {renderCitationAudit(diag)}
-                          </div>
-                        </div>
+                          )}
+                          {isFlagged && diag.explanation && <p className="diag-expl">{diag.explanation}</p>}
+                          {isFlagged && diag.suggestion && diag.suggestion !== 'N/A' && diag.suggestion !== '-' && (
+                            <p className="diag-sugg" lang="ru"><span className="diag-sugg-label">建议</span>{diag.suggestion}</p>
+                          )}
+                          {diag.think && (
+                            <details className="disclosure" onClick={e => e.stopPropagation()}>
+                              <summary><ChevronRight size={13} className="chev" aria-hidden />模型推理过程</summary>
+                              <div className="terminal-block">{diag.think}</div>
+                            </details>
+                          )}
+                        </article>
                       );
                     })}
 
-                  {(activeTab === 'all' || activeTab === 'integrity') && integrityWarnings.length > 0 && renderIntegrityReport()}
+                  {(activeTab === 'all' || activeTab === 'integrity') && integrityWarnings.length > 0 && (
+                    <section className="card">
+                      <div className="card-head"><h3 className="card-title">参考文献完整性</h3><span className="card-meta num">{integrityWarnings.length} 项</span></div>
+                      <ul className="integrity-list">
+                        {integrityWarnings.map((w, idx) => (
+                          <li key={idx}>
+                            <div className="integrity-title"><i className="dot tone-warning" />{w.explanation}</div>
+                            {w.suggestion && w.suggestion !== '-' && <div className="integrity-sugg">{w.suggestion}</div>}
+                            <div className="integrity-ref mono">{w.text.replace('Citation Integrity Alert ', '')}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
                 </>
               );
             })()}
 
             {isAnalyzing && (
-              <div className="glass-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '24px' }}>
-                <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid var(--border-subtle)', borderTopColor: 'var(--accent-cyan)', animation: 'spin 0.8s linear infinite' }} />
-                <span style={{ fontSize: '13px', color: 'var(--accent-cyan)', fontWeight: 500 }}>深度神经网络质检计算中...</span>
-                <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
+              <div className="pending-row" role="status">
+                <span className="pending-bar" aria-hidden />
+                {diagnosis.phase === 'preparing' ? '识别学科、建立会话…' : `正在分析第 ${Math.min(progress.current + 1, progress.total)} 句`}
               </div>
             )}
 
-            {/* Future Extension Modules */}
             {diagnosis.phase === 'done' && (
-              <div className="glass-card" style={{ marginTop: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-                  <Zap size={14} color="var(--accent-cyan)" />
-                  <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
-                    论文深度工程扩展 (Thesis Extension Suite)
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                  <button className="btn-ghost" disabled title="此功能尚未接入网页" style={{ justifyContent: 'flex-start', padding: '10px 12px', background: 'var(--bg-card-inner)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    ✨ 全文自然化润色
-                  </button>
-                  <button className="btn-ghost" disabled title="此功能尚未接入网页" style={{ justifyContent: 'flex-start', padding: '10px 12px', background: 'var(--bg-card-inner)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    📚 GOST 参考文献修补
-                  </button>
-                  <button className="btn-ghost" disabled title="此功能尚未接入网页" style={{ justifyContent: 'flex-start', padding: '10px 12px', background: 'var(--bg-card-inner)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    📏 鲍曼/GOST 排版核查
-                  </button>
-                  <button className="btn-ghost" disabled title="此功能尚未接入网页" style={{ justifyContent: 'flex-start', padding: '10px 12px', background: 'var(--bg-card-inner)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                    🏗️ 章节逻辑骨架审阅
-                  </button>
-                </div>
-              </div>
+              <section className="card">
+                <div className="card-head"><h3 className="card-title">更多审计</h3><span className="card-meta">通过 MCP 客户端使用</span></div>
+                <ul className="roadmap-list">
+                  <li><span>ВАК / ГОСТ 合规审计</span><span className="card-meta mono">thesis_audit_vak_gost_compliance</span></li>
+                  <li><span>ВАК 学科代码匹配</span><span className="card-meta mono">thesis_map_vak_specialty</span></li>
+                  <li><span>全文自然化润色</span><span className="card-meta">规划中 · 目前可逐句改写</span></li>
+                  <li><span>章节逻辑骨架审阅</span><span className="card-meta">规划中</span></li>
+                </ul>
+              </section>
             )}
           </div>
         </div>

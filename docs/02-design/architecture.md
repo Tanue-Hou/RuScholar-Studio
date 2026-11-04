@@ -44,7 +44,7 @@ flowchart TB
 3. `POST /api/session` → 在内存登记文本与引擎参数，返回 `session_id`
 4. （可选）`POST /api/upload_references` → 按 `session_id` 缓存 BibTeX、建立 BM25 索引；返回 `bibtex_keys` / `pdf_keys`，分别表示书目信息与已索引全文
 5. `GET /api/diagnose?session_id=` → SSE：
-   - `init`：`{total_sentences, discipline, nlp_backend}`
+   - `init`：`{total_sentences, discipline, nlp_backend, calibration}`；`calibration` 为本学科实际使用的阈值 `{ppl_low, ppl_high, nv_ratio_max, passive_max}`（来自 `calibration_config.json`，缺省 15 / 80 / 4.5）
    - `result`：每句一条（引文完整性全局告警用负数 index 先推送）
    - `done`：汇总
    - `error`

@@ -48,10 +48,19 @@ export interface DiagnosticResult extends Partial<RiskScores> {
   citation_audit?: CitationAudit[];
 }
 
+/** Thresholds the backend applied for the detected discipline (calibration_config.json). */
+export interface Calibration {
+  ppl_low: number;
+  ppl_high: number;
+  nv_ratio_max: number;
+  passive_max?: number | null;
+}
+
 export interface InitEvent {
   total_sentences: number;
   discipline: string;
   nlp_backend?: 'spacy' | 'fallback';
+  calibration?: Calibration;
 }
 
 export type ModelStatus = 'checking' | 'exists' | 'missing' | 'downloading';
