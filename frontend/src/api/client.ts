@@ -19,10 +19,10 @@ export async function checkModel(): Promise<boolean> {
   return data.exists;
 }
 
-export async function uploadDocument(file: File): Promise<string> {
+export async function uploadDocument(file: File, signal?: AbortSignal): Promise<string> {
   const form = new FormData();
   form.append('file', file);
-  const data = await expectJson<{ text: string }>(await fetch('/api/upload', { method: 'POST', body: form }));
+  const data = await expectJson<{ text: string }>(await fetch('/api/upload', { method: 'POST', body: form, signal }));
   return data.text;
 }
 

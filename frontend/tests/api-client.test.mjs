@@ -45,3 +45,43 @@ test('reference registration keeps metadata distinct from indexed full text', as
     globalThis.fetch = previous
   }
 })
+
+test('document upload forwards cancellation and reports backend errors', async () => {
+  const previous = globalThis.fetch
+  const controller = new AbortController()
+  const file = new File(['synthetic manuscript'], 'synthetic.txt', { type: 'text/plain' })
+  try {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, '/api/upload')
+      assert.equal(options.method, 'POST')
+      assert.equal(options.signal, controller.signal)
+      assert.equal(options.body.get('file').name, 'synthetic.txt')
+      return new Response(JSON.stringify({ detail: 'File exceeds upload limit' }), { status: 413 })
+    }
+    await assert.rejects(api.uploadDocument(file, controller.signal), /File exceeds upload limit/)
+  } finally {
+    globalThis.fetch = previous
+  }
+})
+
+test('model download uses POST and decodes progress across chunk boundaries', async () => {
+  const previous = globalThis.fetch
+  const progress = []
+  try {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, '/api/download_model')
+      assert.equal(options.method, 'POST')
+      const encoder = new TextEncoder()
+      return new Response(new ReadableStream({
+        start(controller) {
+          for (const chunk of ['data: {"status":"downloading","progress":', '37}\r\n\r\ndata: {"status":"complete"}\n\n']) controller.enqueue(encoder.encode(chunk))
+          controller.close()
+        },
+      }))
+    }
+    await api.downloadModel(percent => progress.push(percent))
+    assert.deepEqual(progress, [37])
+  } finally {
+    globalThis.fetch = previous
+  }
+})

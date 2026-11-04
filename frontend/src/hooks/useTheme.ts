@@ -10,7 +10,7 @@ function initialTheme(): Theme {
   } catch {
     // storage unavailable (private mode etc.)
   }
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return 'dark';
 }
 
 export function useTheme() {

@@ -91,7 +91,7 @@ MCP 的 `server.py` 保留启动与兼容入口；`app.py` 装配 FastMCP，`cor
 - 会话与文献缓存：线程安全 `ExpiringDict`，按空闲 TTL 惰性过期，默认 7200 秒；每次读取前先清理过期项。诊断会话在 SSE 启动前取出，仅能消费一次。
 - 模型实例：`ModelRegistry` 懒加载，Web 与 MCP 进程各自持有一份；纯云端模式不加载本地 GGUF。
 - 本地推理：线程 `RLock` 覆盖整个原生调用，异步入口使用 `asyncio.to_thread`；云端调用并发（每批 3 句）。
-- 前端：`useDiagnosis` 管理取消信号与运行编号，停止、重置和卸载后，旧请求不得回写当前诊断。
+- 前端：RS-0017 恢复大改前的深色玻璃双栏与顶部引擎栏；仍由 `api/client.ts`、`useDiagnosis`、`useModelStatus` 管理新接口。取消信号与运行编号保证停止、重置和卸载后旧请求不得回写当前诊断。
 
 ## 7. 已知设计债
 见 `docs/00-overview/project-overview.md` 第 4 节与 `collab/board.md`。
