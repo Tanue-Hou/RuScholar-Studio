@@ -12,5 +12,5 @@ python-multipart>=0.0.6
 sse-starlette>=1.6.5
 # FastMCP lives at mcp.server.fastmcp only in 1.x; 2.x renamed it (MCPServer).
 mcp>=1.0.0,<2
-pymorphy3>=2.1
+pymorphy3>=2.0
 

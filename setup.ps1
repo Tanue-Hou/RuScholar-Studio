@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $RootDir
 
-& $PythonBin -c "import sys; sys.exit('Python 3.9 or newer is required.') if sys.version_info < (3, 9) else None"
+& $PythonBin -c "import sys; sys.exit('Python 3.10 or newer is required (the mcp package needs it).') if sys.version_info < (3, 10) else None"
 
 if (-not (Test-Path $VenvDir)) {
     & $PythonBin -m venv $VenvDir
@@ -16,6 +16,8 @@ if (-not (Test-Path $VenvDir)) {
 
 & "$VenvDir\Scripts\python.exe" -m pip install --upgrade pip
 & "$VenvDir\Scripts\pip.exe" install -r requirements.txt
+# Install the project itself (editable) for the ruscholar-web / ruscholar-mcp commands.
+& "$VenvDir\Scripts\pip.exe" install --no-deps -e .
 & "$VenvDir\Scripts\python.exe" -m spacy download ru_core_news_sm
 
 if (Get-Command npm -ErrorAction SilentlyContinue) {
@@ -31,4 +33,5 @@ if ($DownloadModel) {
     & "$VenvDir\Scripts\python.exe" -c "from naturalization_layer.model_downloader import download_model; from services.shared_state import MODEL_PATH; download_model(MODEL_PATH)"
 }
 
-Write-Host "Setup complete. Start Web UI with: .\.venv\Scripts\python.exe backend\main.py"
+Write-Host "Setup complete. Start Web UI with: .\.venv\Scripts\ruscholar-web.exe"
+Write-Host "MCP server (stdio): .\.venv\Scripts\ruscholar-mcp.exe"

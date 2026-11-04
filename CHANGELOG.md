@@ -6,6 +6,122 @@ up the work without re-reading the whole diff.
 
 ---
 
+## 2026-11-04 — Architecture review, phase 3: packaging, CI, MCP split, frontend redesign
+
+Branch: `claude/sharp-einstein-dmbnvw` · Base commit: `7faad33` (phase 2)
+
+### 1. Packaging and entry points
+- `pyproject.toml` now has full `[project]` metadata, so `pip install -e .` works.
+  - Dependencies are listed, and the package data includes the rules and calibration JSON.
+  - Extras: `local` = llama-cpp-python (a native build, now optional); `dev` = pytest, httpx, pyflakes.
+  - The version is read from `VERSION`.
+- Console scripts: `ruscholar-web` (= `python -m backend.main`) and `ruscholar-mcp`
+  (= `python -m mcp_server.server`). Both run from any directory.
+- `backend/main.py` adds the project root to `sys.path` only when it is started as a
+  script, so `python backend/main.py` keeps working. `setup.sh` / `setup.ps1` now run
+  `pip install --no-deps -e .` and print the new commands; the README uses them.
+- **Decision:** the existing top-level package names are kept (`backend`, `services`,
+  `naturalization_layer`, `mcp_server`). Moving to `src/ruscholar/` would rename every
+  import and break MCP client configs already in use (`python -m mcp_server.server`).
+- Behaviour change: uvicorn auto-reload is now off by default. Turn it on with
+  `RUSCHOLAR_RELOAD=1`.
+- **Fix — fresh installs were failing:** `pymorphy3>=2.1` could never be satisfied (PyPI's
+  newest release is 2.0.6), so `pip install -r requirements.txt` failed at that line. It is
+  now `>=2.0`. Found by installing into a clean virtualenv.
+- **Fix — Python minimum version:** the requirement is now **3.10**. `mcp` (all 1.x
+  releases), fastapi and spacy all require ≥ 3.10, so the old "3.9+" claim was never true.
+  Updated in `pyproject.toml`, both setup scripts and the README. `source_similarity.py`
+  got `from __future__ import annotations` anyway.
+
+### 2. CI (`.github/workflows/ci.yml`)
+- **Python 3.10 and 3.12:** `pip install -e ".[dev]"`, download the spaCy model, run
+  `pytest`, check that the entry points import. llama-cpp-python is not installed; the
+  real-model test skips itself.
+- **Frontend (Node 22):** `npm ci`, `npm run lint`, `npm run build`.
+- The Python job was reproduced locally in a clean 3.12 virtualenv (all tests passed). The
+  workflow itself has not run on GitHub yet.
+
+### 3. Backend hardening
+- Upload size limit: `RUSCHOLAR_MAX_UPLOAD_MB` (default 50) applies to `/api/upload` and
+  `/api/upload_references`. Larger files get HTTP 413.
+- Removed the four placeholder routes that only returned 501 (`/api/polish`,
+  `/api/references`, `/api/format`, `/api/structure`). The frontend buttons that pointed at
+  them did nothing and are gone too.
+- `NLICitationJudge`: local mode without a model now returns `AUDIT_FAILED` with a clear
+  "local model not installed" explanation. Before, it called `None` and logged an error.
+- New tests are in `tests/test_backend_security.py`.
+
+### 4. MCP server split
+`mcp_server/server.py` (~1060 lines) became:
+- `app.py`: the FastMCP instance, `get_engines()` and the argument enums;
+- `core.py`: the plain functions behind the tools;
+- `tools/{workflow,manuscript,citations,model,references}.py`: the 17 tool definitions,
+  moved without changes;
+- `server.py`: a 42-line entry point that registers the tools and re-exports every
+  previously public name.
+
+Tests that patched `mcp_server.server.get_engines` now patch `mcp_server.app.get_engines`;
+the tools call it through the module, so one patch covers all of them.
+**Verified:** names, descriptions and input schemas of all 17 tools are identical to the
+previous version (`list_tools()` compared against `git show HEAD:mcp_server/server.py`).
+A real stdio handshake via `ruscholar-mcp` lists 17 tools.
+
+### 5. Frontend: split and redesign ("学术典藏")
+The user chose the editorial direction: warm paper canvas, serif manuscript text, ink
+black, and one wine-red accent. Issues appear as numbered margin notes instead of
+coloured highlighting.
+
+- **Structure:** `App.tsx` went from 1361 lines to 222 lines of composition; the rest
+  moved into:
+  - `api/client.ts`: a typed client, including the POST download stream parser;
+  - `types.ts`;
+  - `hooks/useDiagnosis.ts`: the analysis lifecycle as a reducer, replacing about 20
+    `useState` calls;
+  - `hooks/useModelStatus.ts` and `hooks/useTheme.ts`;
+  - `lib/labels.ts`: all label/category tables in one place;
+  - `components/`: `TopBar`, `SettingsSheet`, `ImportView`, `ManuscriptPage`, `Summary`,
+    `NoteList`, `Inspector`.
+- **Design system** (`index.css`): colour tokens for light (paper) and dark (ink) themes;
+  the Minor Third type scale; weights 400/500/600 only; hairline borders before shadows;
+  motion only on transform/opacity; `prefers-reduced-motion` respected. The theme follows
+  the system setting, can be toggled and is remembered; an inline script sets it before
+  first paint.
+- **Fonts:** Source Serif 4 (with Cyrillic) and Inter are bundled through `@fontsource`.
+  The old `index.html` loaded Google Fonts, which contacted Google on every launch of this
+  "offline" tool.
+- **UX changes:**
+  - Engine settings moved from a crowded header into a slide-over. It traps focus, closes
+    on Esc and returns focus to the button that opened it.
+  - Starting in local mode without a model opens that sheet instead of an `alert()`.
+  - The drop zone now accepts drag-and-drop (the old one said "拖拽" but only supported
+    clicking).
+  - Replacing the manuscript after an analysis asks for confirmation and names the file and
+    the number of results that will be lost.
+  - Perplexity values are hidden by default behind a toggle.
+  - Touch targets are 44 px on coarse pointers.
+  - The engine value `deepseek-flash` became `cloud-flash`, consistent with MCP; the backend
+    accepts both.
+- The pre-existing ESLint error in `App.tsx` is gone; `npm run lint` is clean.
+- `docs/assets/webui-diagnostics.png` now shows the new UI, rendered from **sample data**.
+  The README captions in all three languages were updated and say so.
+- **Verified (Playwright, real backend serving the built UI, `/api/*` answered by a
+  fixture):** light and dark at 1440 px, 1280 px, and 375/390 px with touch:
+  - no console errors and no horizontal overflow;
+  - computed manuscript size 19.2 px and list text 14 px;
+  - no button under 44 px on touch;
+  - Esc closes the sheet and focus returns to its trigger;
+  - cancelling the replace-manuscript confirmation keeps the results.
+- **Not verified:** a real analysis end to end in the browser (no GGUF model or DeepSeek key
+  in the container), Safari/Firefox, and screen readers.
+
+### Remaining ideas (not started)
+- Phase 4 from the roadmap below: a separate PPL scoring context, persistent sessions
+  (SQLite), an evaluation set and threshold calibration.
+- Frontend: optionally merge detect/session/upload into one `POST /api/analyses` call;
+  add component tests (Vitest + Testing Library).
+
+---
+
 ## 2026-11-04 — Architecture review, phase 2: service-layer consolidation
 
 Branch: `claude/sharp-einstein-dmbnvw` · Base commit: `0c10cf5` (phase 1)
@@ -198,7 +314,7 @@ To restore any of them: `git show 078365e:<path> > <path>`.
   pydantic-settings (actually load `.env`). Also dedupe rules/calibration loading and
   `get_discipline_rules` (in both `main.py` and `diagnostic_service.py`), and the
   reference-ingestion code (`upload_references` vs MCP `register_references`).
-- **Phase 3:** proper package layout plus console entry points (drop the `sys.path`
+- ~~**Phase 3:**~~ **Done — see the phase 3 entry above.** proper package layout plus console entry points (drop the `sys.path`
   hacks); GitHub Actions CI (pytest, `npm run build`, lint); use
   `pytest.importorskip("llama_cpp")` in llama-dependent tests; split `App.tsx` into
   `api/`, `hooks/`, `components/`; upload size limits; remove the 501 placeholder routes.

@@ -65,4 +65,4 @@ echo " Restarting RuScholar Studio Backend on Port 6666... "
 echo "=========================================================="
 
 export RUSCHOLAR_PORT=6666
-exec "$PROJECT_ROOT/.venv/bin/python" "$PROJECT_ROOT/backend/main.py"
+exec "$PROJECT_ROOT/.venv/bin/python" -m backend.main

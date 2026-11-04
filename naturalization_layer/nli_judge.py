@@ -32,6 +32,12 @@ class NLICitationJudge:
             }
 
         api_engine = resolve_cloud_model(engine_type)
+        if not is_cloud_model(api_engine) and self.llm is None:
+            return {
+                "status": "AUDIT_FAILED",
+                "explanation_zh": "本地模型未安装或未能加载，已跳过引用逻辑核验。可下载本地模型，或切换到混合/云端模式。",
+                "evidence_snippet": ""
+            }
 
         sys_prompt = """You are an academic citation auditor. Your task is to verify if a given claim (sentence) from a research paper is logically supported by the provided snippets retrieved from the cited reference.
 You must classify the relationship into exactly one of three categories:

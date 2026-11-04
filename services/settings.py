@@ -64,6 +64,9 @@ class Settings:
         o.strip() for o in _env("RUSCHOLAR_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
         if o.strip()))
 
+    # Per-file upload limit for /api/upload and /api/upload_references.
+    max_upload_bytes: int = field(default_factory=lambda: int(float(_env("RUSCHOLAR_MAX_UPLOAD_MB", "50")) * 1024 * 1024))
+
     # In-memory sessions (pending analyses and uploaded references) expire after this.
     session_ttl_seconds: int = field(default_factory=lambda: int(_env("RUSCHOLAR_SESSION_TTL", "7200")))
 

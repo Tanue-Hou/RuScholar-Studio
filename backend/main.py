@@ -10,14 +10,17 @@ import traceback
 import uuid
 from contextlib import asynccontextmanager
 
+if __package__ in (None, ""):
+    # Started as a script (`python backend/main.py`): make the project root
+    # importable. Installed (`pip install -e .`) or `python -m backend.main`
+    # runs need nothing here.
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
-
-# Add project root to sys.path so `python backend/main.py` works from any cwd.
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from naturalization_layer.citation_integrity import extract_bibliography_mapping
 from naturalization_layer.discipline import detect_discipline_by_keywords
@@ -64,6 +67,18 @@ app.add_middleware(
 )
 
 
+async def _read_upload(file: UploadFile) -> bytes:
+    """Read an upload, refusing anything above RUSCHOLAR_MAX_UPLOAD_MB."""
+    limit = settings.max_upload_bytes
+    data = await file.read(limit + 1)
+    if len(data) > limit:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{file.filename} is larger than {limit // (1024 * 1024)} MB (RUSCHOLAR_MAX_UPLOAD_MB).",
+        )
+    return data
+
+
 def _sse_error(message: str) -> EventSourceResponse:
     async def gen():
         yield {"event": "error", "data": json.dumps({"error": message})}
@@ -83,7 +98,7 @@ async def upload_references(
         print(f"Failed to parse BibTeX: {e}")
 
     for file in files:
-        contents = await file.read()
+        contents = await _read_upload(file)
         try:
             ingest_reference_document(session_id, file.filename, contents)
         except Exception as e:
@@ -95,7 +110,7 @@ async def upload_references(
 
 @app.post("/api/upload")
 async def upload_document(file: UploadFile = File(...)):
-    contents = await file.read()
+    contents = await _read_upload(file)
     try:
         text = parse_document_bytes(file.filename, contents)
     except Exception as e:
@@ -236,24 +251,6 @@ async def download_model_endpoint():
     return EventSourceResponse(event_generator())
 
 
-# Future Extension Interfaces (Placeholder)
-@app.post("/api/polish")
-async def polish_text(text: str):
-    raise HTTPException(status_code=501, detail="Use /api/diagnose or the MCP suggest_revision tool for revision suggestions.")
-
-@app.post("/api/references")
-async def check_references(text: str):
-    raise HTTPException(status_code=501, detail="Use /api/upload_references or the MCP audit_citations tool for citation checks.")
-
-@app.post("/api/format")
-async def check_format(text: str):
-    raise HTTPException(status_code=501, detail="Document formatting checks are reserved for a future release.")
-
-@app.post("/api/structure")
-async def analyze_structure(text: str):
-    raise HTTPException(status_code=501, detail="Structure analysis is reserved for a future release.")
-
-
 # Serve frontend build statically
 frontend_dist = os.path.join(os.path.dirname(__file__), "../frontend/dist")
 if os.path.exists(frontend_dist):
@@ -261,7 +258,14 @@ if os.path.exists(frontend_dist):
 else:
     print(f"Warning: Frontend build directory not found at {frontend_dist}. Please run `npm run build` in the frontend directory.")
 
-if __name__ == "__main__":
+def run() -> None:
+    """Console entry point: `ruscholar-web` (or `python -m backend.main`)."""
     import uvicorn
     # Loopback by default (see services/settings.py): manuscripts are private.
-    uvicorn.run("main:app", host=settings.host, port=settings.port, reload=True)
+    # Set RUSCHOLAR_RELOAD=1 for auto-reload during development.
+    reload = os.getenv("RUSCHOLAR_RELOAD", "") == "1"
+    uvicorn.run("backend.main:app", host=settings.host, port=settings.port, reload=reload)
+
+
+if __name__ == "__main__":
+    run()

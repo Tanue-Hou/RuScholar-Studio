@@ -1,7 +1,7 @@
 # RuScholar Studio 🎓
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![Node Version](https://img.shields.io/badge/node-18%2B-green)](https://nodejs.org/)
 
 **RuScholar Studio** (formerly *PhD Thesis Butler*) is a professional-grade, privacy-first academic writing quality audit and style naturalization workspace designed specifically for Russian dissertations, manuscripts, and research papers. It provides a hybrid diagnostic workflow that runs locally or in the cloud.
@@ -22,7 +22,7 @@
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!IMPORTANT]
-> Web UI 会实时高亮论文正文中的风格、句法和参考文献证据链异常（黄色表示警告，红色表示高风险）。这些标记是为作者提供**修改建议与证据链线索**，绝非对学术不端或 AI 代写的自动裁决。
+> Web UI 以页边批注的形式标出正文中的风格、句法和参考文献证据链问题：需要修改的句子带细下划线和编号，点开编号即可看到原因、指标、改写建议与引用核验结果（截图使用示例数据）。这些标记是为作者提供**修改建议与证据链线索**，绝非对学术不端或 AI 代写的自动裁决。
 
 ---
 
@@ -75,7 +75,7 @@ RuScholar Studio 是在 **PhD Thesis Butler** (`phd-thesis-butler`) 自定义 AI
 
 | 资源 | 最低配置 | 推荐配置 |
 | :--- | :--- | :--- |
-| **Python** | 3.9+ | 3.10+ |
+| **Python** | 3.10+ | 3.12 |
 | **Node.js** | 18+ | 20+ |
 | **RAM 内存** | 8 GB（适用于纯云端模式） | 16 GB 以上（适用于本地 GGUF 推理） |
 | **磁盘空间** | 500 MB（源码与依赖包） | 4 GB（含 2.7 GB 的本地模型文件） |
@@ -125,7 +125,7 @@ python -c "from naturalization_layer.model_downloader import download_model; fro
 
 ```bash
 source .venv/bin/activate
-python backend/main.py
+ruscholar-web   # 等价于 python -m backend.main
 ```
 在浏览器中打开 **`http://localhost:8000`**。
 
@@ -134,7 +134,7 @@ python backend/main.py
 ```bash
 # 终端 1: 启动后端 API 服务
 source .venv/bin/activate
-python backend/main.py
+RUSCHOLAR_RELOAD=1 ruscholar-web   # 后端自动重载
 
 # 终端 2: 启动前端 Vite 调试服务
 cd frontend
@@ -210,6 +210,7 @@ cp .env.example .env
 | `RUSCHOLAR_SESSION_TTL` | `7200` | 会话（待分析文本、已上传文献）闲置多少秒后自动清理。 |
 | `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | 允许跨域的来源（逗号分隔），仅 Vite 开发服务器需要。 |
 | `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | 云端 Judge 请求超时（秒）。 |
+| `RUSCHOLAR_MAX_UPLOAD_MB` | `50` | 单个上传文件（手稿或参考文献）的大小上限（MB）。 |
 
 ---
 
@@ -245,7 +246,7 @@ RuScholar Studio 采用 **MIT License** 开源。
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!NOTE]
-> Web UI подсвечивает стилистические аномалии и проблемы с источниками в реальном времени. Предложения кодируются цветом (желтый для предупреждения, красный для высокого риска) на основе нарушения правил диссертационного письма, физического показателя перплексивности (PPL) и проверки цитирования через NLI. Данные отчеты служат **помощником для рецензирования**, а не автоматическим вердиктом о плагиате или использовании ИИ.
+> Web UI подсвечивает стилистические аномалии и проблемы с источниками в реальном времени. Проблемные предложения помечаются тонким подчёркиванием и номером примечания, как редакторские пометки на полях; по номеру открываются причина, метрики, вариант правки и результат проверки цитирования через NLI (на снимке — демонстрационные данные). Данные отчеты служат **помощником для рецензирования**, а не автоматическим вердиктом о плагиате или использовании ИИ.
 
 ---
 
@@ -298,7 +299,7 @@ RuScholar Studio представляет собой визуальную сре
 
 | Ресурс | Минимум | Рекомендуется |
 | :--- | :--- | :--- |
-| **Python** | 3.9+ | 3.10+ |
+| **Python** | 3.10+ | 3.12 |
 | **Node.js** | 18+ | 20+ |
 | **RAM** | 8 GB для cloud-only режима | 16 GB+ для локальной модели |
 | **Диск** | 500 MB для исходного кода и зависимостей | 4 GB с учетом 2.7 GB GGUF-модели |
@@ -348,7 +349,7 @@ python -c "from naturalization_layer.model_downloader import download_model; fro
 
 ```bash
 source .venv/bin/activate
-python backend/main.py
+ruscholar-web   # то же, что python -m backend.main
 ```
 Откройте в браузере **`http://localhost:8000`**.
 
@@ -357,7 +358,7 @@ python backend/main.py
 ```bash
 # Терминал 1: Запуск API
 source .venv/bin/activate
-python backend/main.py
+RUSCHOLAR_RELOAD=1 ruscholar-web   # автоперезапуск backend
 
 # Терминал 2: Запуск Vite Dev Server
 cd frontend
@@ -433,6 +434,7 @@ cp .env.example .env
 | `RUSCHOLAR_SESSION_TTL` | `7200` | Через сколько секунд простоя удаляются сессии (тексты на анализ, загруженные источники). |
 | `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Разрешённые CORS-источники (через запятую); нужны только для dev-сервера Vite. |
 | `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | Таймаут запросов к облачному judge (сек.). |
+| `RUSCHOLAR_MAX_UPLOAD_MB` | `50` | Максимальный размер одного загружаемого файла (МБ). |
 
 ---
 
@@ -470,7 +472,7 @@ Below is the visual dashboard showing the hybrid diagnostics workflow in action:
 ![Web UI Diagnostics](docs/assets/webui-diagnostics.png)
 
 > [!NOTE]
-> The Web UI highlights stylistic and evidence anomalies in real-time. Sentences are color-coded (yellow for warning, red for high risk) based on rule violations, perplexity (PPL) anomalies, and citation verification results. This is designed to serve as a **review assistant and evidence tracer**, not an automated verdict of plagiarism or AI generation.
+> The Web UI highlights stylistic and evidence anomalies in real-time. Sentences that need work get a fine underline and a numbered margin note, like an editor's marginalia; opening a note shows the reason, metrics, a suggested rewrite and the citation check (screenshot uses sample data). This is designed to serve as a **review assistant and evidence tracer**, not an automated verdict of plagiarism or AI generation.
 
 ---
 
@@ -523,7 +525,7 @@ RuScholar Studio is the engineering and visualization runtime built on top of th
 
 | Resource | Minimum | Recommended |
 | :--- | :--- | :--- |
-| **Python** | 3.9+ | 3.10+ |
+| **Python** | 3.10+ | 3.12 |
 | **Node.js** | 18+ | 20+ |
 | **RAM** | 8 GB (for cloud-only mode) | 16 GB+ (for local model mode) |
 | **Disk Space** | 500 MB (source and dependencies) | 4 GB (includes 2.7 GB local GGUF model) |
@@ -574,7 +576,7 @@ To start the single-port integrated server (where FastAPI hosts the pre-built Re
 
 ```bash
 source .venv/bin/activate
-python backend/main.py
+ruscholar-web   # same as python -m backend.main
 ```
 Open **`http://localhost:8000`** in your browser.
 
@@ -583,7 +585,7 @@ If you want to modify the React frontend:
 ```bash
 # Terminal 1: Starts Backend API
 source .venv/bin/activate
-python backend/main.py
+RUSCHOLAR_RELOAD=1 ruscholar-web   # auto-reload backend
 
 # Terminal 2: Starts Frontend Dev Server
 cd frontend
@@ -659,6 +661,7 @@ cp .env.example .env
 | `RUSCHOLAR_SESSION_TTL` | `7200` | Idle seconds after which sessions (pending analyses, uploaded references) are dropped. |
 | `RUSCHOLAR_CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed CORS origins (comma-separated); only the Vite dev server needs them. |
 | `RUSCHOLAR_CLOUD_TIMEOUT` | `30` | Timeout for cloud judge requests (seconds). |
+| `RUSCHOLAR_MAX_UPLOAD_MB` | `50` | Maximum size of a single uploaded file (MB). |
 
 ---
 
