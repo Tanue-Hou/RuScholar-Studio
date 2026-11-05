@@ -10,7 +10,8 @@ function initialTheme(): Theme {
   } catch {
     // storage unavailable (private mode etc.)
   }
-  return 'dark';
+  // Bright by default (RS-0019); an explicit choice is remembered.
+  return 'light';
 }
 
 export function useTheme() {

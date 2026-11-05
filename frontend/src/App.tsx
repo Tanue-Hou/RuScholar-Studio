@@ -20,7 +20,7 @@ import { useDiagnosis } from './hooks/useDiagnosis';
 import { useModelStatus } from './hooks/useModelStatus';
 import { useTheme } from './hooks/useTheme';
 import {
-  DEFAULT_CALIBRATION, documentStats, fmt, int, issueBreakdown, lexicalTotals, pplStats, riskLevel,
+  DEFAULT_CALIBRATION, bodyOf, documentStats, fmt, int, isUnjudged, issueBreakdown, issueTypesOf, lexicalTotals, pplStats, riskLevel,
 } from './lib/analysis';
 import type { CitationAudit, DiagnosticResult, EngineType, SentenceMetrics } from './types';
 
@@ -28,6 +28,8 @@ interface SentenceItem {
   text: string;
   status: string;
   issue_type?: string | null;
+  is_bibliography?: boolean;
+  judge_error?: boolean;
   ppl?: number | null;
   metrics?: SentenceMetrics | null;
 }
@@ -41,9 +43,6 @@ const DISCIPLINE_MAP: Record<string, { zh: string; ru: string }> = {
   UNIVERSAL: { zh: '通用学术 · 跨学科', ru: 'Междисциплинарная область' },
 };
 
-/** Status tone for non-issue states (passed / infrastructure errors). */
-const isInfraIssue = (t: string | null) => t === 'json_parse_error' || t === 'api_request_error';
-
 const ENGINE_LABELS: Record<EngineType, string> = {
   local: '本地 · Qwen3-8B GGUF',
   'hybrid-pro': '混合 · 本地 PPL + DeepSeek Pro',
@@ -52,11 +51,13 @@ const ENGINE_LABELS: Record<EngineType, string> = {
   'cloud-flash': '云端 · DeepSeek Flash',
 };
 
+const CITATION_TYPES = ['citation_gap', 'citation_contradiction'];
+
 const RISK_ROWS = [
-  { key: 'predictability', label: '可预测性', hint: '词汇分布过于平滑，困惑度偏低' },
-  { key: 'uniformity', label: '句式均匀度', hint: '句长与句式结构过于整齐' },
-  { key: 'translationese', label: '翻译腔', hint: '名词化、被动语态、第二格链' },
-  { key: 'redundancy', label: '语义冗余', hint: '套话、连接词与冗长修饰' },
+  { key: 'predictability', label: '可预测性', hint: '困惑度低于本学科下限的句子占比', noPplHint: '未计算困惑度：此项为需修改句占比' },
+  { key: 'uniformity', label: '句式均匀度', hint: '各句困惑度的离散程度，越整齐风险越高', noPplHint: '未计算困惑度：按句长差异估计' },
+  { key: 'translationese', label: '翻译腔', hint: '名词化、被动语态、第二格链', noPplHint: null },
+  { key: 'redundancy', label: '语义冗余', hint: '套话、连接词与冗长修饰', noPplHint: null },
 ] as const;
 
 const CHECKS = [
@@ -85,7 +86,7 @@ function App() {
   const [engineType, setEngineType] = useState<EngineType>('local');
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState('https://api.deepseek.com/v1');
-  const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'ai' | 'flagged' | 'integrity'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'passed' | 'ai' | 'flagged' | 'integrity' | 'unjudged'>('all');
   const [bibtexFile, setBibtexFile] = useState<File | null>(null);
   const [referenceFiles, setReferenceFiles] = useState<File[]>([]);
   const { status: localModelStatus, progress: downloadProgress, download: downloadLocalModel } = model;
@@ -103,6 +104,17 @@ function App() {
   const ppl = pplStats(completed, calib);
   const lexical = lexicalTotals(completed, calib);
   const breakdown = issueBreakdown(completed);
+  // Statistics are over prose only: bibliography entries are not assessed, and
+  // sentences whose judge call failed were not assessed either (not a pass).
+  const body = bodyOf(completed);
+  const bibCount = completed.length - body.length;
+  const unjudged = body.filter(isUnjudged);
+  const assessed = body.length - unjudged.length;
+  const flaggedBody = body.filter(r => r.status === 'flagged');
+  const hasType = (r: DiagnosticResult, pred: (t: string) => boolean) => issueTypesOf(r).some(pred);
+  const isAiType = (t: string) => t === 'ai_generated_suspicion';
+  const isCitationType = (t: string) => CITATION_TYPES.includes(t);
+  const isStyleType = (t: string) => !isAiType(t) && !isCitationType(t);
   const docStats = useMemo(() => documentStats(documentText), [documentText]);
   const referencesUploadStatus = diagnosis.references;
   const sentences: SentenceItem[] = diagnosis.results.map(r => r ?? {
@@ -227,7 +239,9 @@ function App() {
   );
 
   const disciplineInfo = DISCIPLINE_MAP[discipline] ?? DISCIPLINE_MAP.UNIVERSAL;
-  const flaggedPct = progress.total ? Math.round((diagnosis.summary.flagged / progress.total) * 100) : 0;
+  // Share of assessed prose sentences that need work (was: of all slots, incl.
+  // bibliography and not-yet-analysed sentences, which understated it).
+  const flaggedPct = assessed ? Math.round((flaggedBody.length / assessed) * 100) : 0;
   const selected = selectedSentenceIndex !== null ? allDiagnostics[selectedSentenceIndex] : undefined;
 
   return (
@@ -303,9 +317,10 @@ function App() {
         </div>
       </header>
 
-      {(uploadError || model.error || diagnosis.error || diagnosis.phase === 'stopped' || diagnosis.nlpBackend === 'fallback' || engineType !== 'local') && (
+      {(uploadError || model.error || diagnosis.error || unjudged.length > 0 || diagnosis.phase === 'stopped' || diagnosis.nlpBackend === 'fallback' || engineType !== 'local') && (
         <div className="studio-notices" aria-live="polite">
           {(uploadError || model.error || diagnosis.error) && <p role="alert" className="notice tone-critical">{uploadError || model.error || diagnosis.error}</p>}
+          {unjudged.length > 0 && <p className="notice tone-warning">有 {unjudged.length} 句因判定接口异常（如 API Key 无效、网络中断）未能评估，这些句子不代表「通过」。请检查设置后重新质检。</p>}
           {diagnosis.phase === 'stopped' && <p className="notice">质检已停止，{progress.total ? `已完成 ${progress.current} / ${progress.total} 句` : '尚无已完成的结果'}。可以重新开始完整质检。</p>}
           {diagnosis.nlpBackend === 'fallback' && <p className="notice tone-warning">后端缺少 spaCy 俄语模型，名动比、被动语态与第二格链为粗略估计。安装 ru_core_news_sm 后重启后端。</p>}
           {engineType !== 'local' && <p className="notice">{engineType.startsWith('hybrid') ? '混合模式：困惑度在本地计算，需要判定的句子会发送到所选云端接口。' : '云端模式：全部句子发送到所选接口，不计算困惑度。'}</p>}
@@ -394,7 +409,7 @@ function App() {
                       </span>
                     );
                   })}
-                  <span><span className="legend-num is-low">7.4</span>困惑度，着色为低于下限 {calib.ppl_low}</span>
+                  {ppl.count > 0 && <span><span className="legend-num is-low">7.4</span>困惑度，着色为低于下限 {calib.ppl_low}</span>}
                   <span className="doc-legend-note">点击句子查看详情</span>
                 </div>
               )}
@@ -406,7 +421,7 @@ function App() {
                   sentences.map((s, idx) => (
                     <span key={idx}>
                       <span ref={el => { sentenceRefs.current[idx] = el; }}
-                        className={`sentence ${s.status} ${s.status === 'flagged' ? `issue-${issueMeta(s.issue_type).key} line-${issueMeta(s.issue_type).line}` : ''} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
+                        className={`sentence ${s.status} ${s.status === 'flagged' ? `issue-${issueMeta(s.issue_type).key} line-${issueMeta(s.issue_type).line}` : ''} ${s.is_bibliography ? 'biblio' : ''} ${s.judge_error ? 'unjudged' : ''} ${selectedSentenceIndex === idx ? 'selected-highlight' : ''}`}
                         title={s.status === 'flagged' ? issueTitle(s.issue_type) : undefined}
                         onClick={() => s.text && selectSentence(idx)}>
                         {s.text}
@@ -464,34 +479,36 @@ function App() {
                   </div>
                 )}
                 <div className="kpi-grid">
-                  <div className="kpi">
+                  <div className="kpi tint-red">
                     <div className="kpi-label">需修改</div>
-                    <div className={`kpi-value ${flaggedPct >= 30 ? 'tone-critical' : ''}`}>{flaggedPct}<span className="kpi-unit">%</span></div>
-                    <div className="kpi-sub num">{diagnosis.summary.flagged} / {progress.total} 句</div>
+                    <div className="kpi-value">{assessed ? <>{flaggedPct}<span className="kpi-unit">%</span></> : '—'}</div>
+                    <div className="kpi-sub num" title={`${flaggedBody.length} / ${assessed} 句正文；参考文献 ${bibCount} 条免检；未判定 ${unjudged.length} 句`}>
+                      {flaggedBody.length} / {assessed} 句正文{bibCount ? ` · 参考文献 ${bibCount} 条免检` : ''}{unjudged.length ? ` · ${unjudged.length} 句未判定` : ''}
+                    </div>
                   </div>
-                  <div className="kpi">
+                  <div className="kpi tint-blue">
                     <div className="kpi-label">平均困惑度</div>
                     <div className="kpi-value">{fmt(ppl.mean)}</div>
-                    <div className="kpi-sub num">中位 {fmt(ppl.median)} · 范围 {fmt(ppl.min, 0)}–{fmt(ppl.max, 0)}</div>
+                    <div className="kpi-sub num">中位 {fmt(ppl.median)} · 范围 {fmt(ppl.min, 0)}–{fmt(ppl.max, 0)}{ppl.prefix ? ` · ${ppl.prefix} 句为前缀估计` : ''}</div>
                   </div>
-                  <div className="kpi">
+                  <div className="kpi tint-orange">
                     <div className="kpi-label">低于下限</div>
-                    <div className={`kpi-value ${ppl.belowLow ? 'tone-critical' : ''}`}>{ppl.count ? ppl.belowLow : '—'}</div>
+                    <div className="kpi-value">{ppl.count ? ppl.belowLow : '—'}</div>
                     <div className="kpi-sub num">PPL &lt; {calib.ppl_low} · 高于上限 {ppl.count ? ppl.aboveHigh : '—'}</div>
                   </div>
-                  <div className="kpi">
+                  <div className="kpi tint-teal">
                     <div className="kpi-label">引文问题</div>
-                    <div className={`kpi-value ${integrityWarnings.length ? 'tone-warning' : ''}`}>
-                      {integrityWarnings.length + completed.filter(d => d.status === 'flagged' && (d.issue_type === 'citation_gap' || d.issue_type === 'citation_contradiction')).length}
+                    <div className="kpi-value">
+                      {integrityWarnings.length + flaggedBody.filter(d => hasType(d, isCitationType)).length}
                     </div>
-                    <div className="kpi-sub num">书目缺失 {integrityWarnings.length} · 逐句 {completed.filter(d => d.citation_audit?.length).length} 处核验</div>
+                    <div className="kpi-sub num">书目缺失 {integrityWarnings.length} · 逐句 {body.filter(d => d.citation_audit?.length).length} 处核验</div>
                   </div>
                 </div>
                 {ppl.count > 0 ? (
                   <PplStrip results={diagnosis.results} calibration={calib} selected={selectedSentenceIndex}
                     onSelect={i => selectSentence(i, true)} />
                 ) : (
-                  progress.current > 0 && <p className="card-foot">当前为云端模式，不计算困惑度分布。</p>
+                  progress.current > 0 && <p className="card-foot">本次没有困惑度数据（云端模式不计算），因此不显示分布图。</p>
                 )}
               </section>
             )}
@@ -503,11 +520,14 @@ function App() {
                   {RISK_ROWS.map(r => {
                     const v = runningRisks[r.key];
                     const level = riskLevel(v);
+                    // Without PPL, predictability is the flagged share of judged
+                    // sentences; with none judged there is nothing to show.
+                    const noData = r.key === 'predictability' && ppl.count === 0 && assessed === 0;
                     return (
                       <li key={r.key} className="risk-row">
-                        <div className="risk-name">{r.label}<span className="risk-hint">{r.hint}</span></div>
-                        <div className={`risk-value num ${level === '高' ? 'tone-critical' : ''}`}>{v}%<span className="risk-level">{level}</span></div>
-                        <div className="telemetry-track"><div className={`telemetry-fill ${level === '高' ? 'high' : level === '中' ? 'mid' : ''}`} style={{ transform: `scaleX(${v / 100})` }} /></div>
+                        <div className="risk-name">{r.label}<span className="risk-hint">{ppl.count === 0 && r.noPplHint ? r.noPplHint : r.hint}</span></div>
+                        <div className={`risk-value num ${!noData && level === '高' ? 'tone-critical' : ''}`}>{noData ? '—' : <>{v}%<span className="risk-level">{level}</span></>}</div>
+                        <div className="telemetry-track"><div className={`telemetry-fill ${level === '高' ? 'high' : level === '中' ? 'mid' : 'low'}`} style={{ transform: `scaleX(${noData ? 0 : v / 100})` }} /></div>
                       </li>
                     );
                   })}
@@ -568,9 +588,15 @@ function App() {
                   <>
                     <div className="verdict-row">
                       {selected.status === 'flagged' ? (
-                        <span className={`tag issue-tag issue-${issueMeta(selected.issue_type).key}`}>
-                          <i className={`swatch issue-${issueMeta(selected.issue_type).key}`} aria-hidden />{issueTitle(selected.issue_type)}
-                        </span>
+                        issueTypesOf(selected).map(t => (
+                          <span key={t} className={`tag issue-tag issue-${issueMeta(t).key}`}>
+                            <i className={`swatch issue-${issueMeta(t).key}`} aria-hidden />{issueTitle(t)}
+                          </span>
+                        ))
+                      ) : selected.is_bibliography ? (
+                        <span className="tag">参考文献 · 免检</span>
+                      ) : isUnjudged(selected) ? (
+                        <span className="tag tone-warning">未判定 · {issueTitle(selected.issue_type)}</span>
                       ) : (
                         <span className="tag tone-good">{selected.status === 'early_exit' ? '通过 · 快速判定' : '通过'}</span>
                       )}
@@ -583,7 +609,10 @@ function App() {
                       <tbody>
                         <tr>
                           <td>困惑度 PPL</td>
-                          <td className={`num ${pplClass(selected.ppl)}`}>{typeof selected.ppl === 'number' ? selected.ppl : '未计算'}</td>
+                          <td className={`num ${pplClass(selected.ppl)}`}>
+                            {typeof selected.ppl === 'number' ? selected.ppl : '未计算'}
+                            {selected.ppl_basis === 'prefix' && <span className="ppl-basis">前 6 词估计</span>}
+                          </td>
                           <td className="num">{calib.ppl_low}–{calib.ppl_high}</td>
                         </tr>
                         {selected.metrics && <>
@@ -600,6 +629,21 @@ function App() {
                       <div className="block">
                         <div className="sub-title">诊断依据</div>
                         <p className="block-text">{selected.explanation}</p>
+                      </div>
+                    )}
+
+                    {(selected.issues?.length ?? 0) > 1 && (
+                      <div className="block">
+                        <div className="sub-title">同一句的其他问题 · {selected.issues!.length - 1} 项</div>
+                        <ul className="extra-issues">
+                          {selected.issues!.slice(1).map((iss, k) => (
+                            <li key={k}>
+                              <div className="extra-issue-title"><i className={`swatch issue-${issueMeta(iss.issue_type).key}`} aria-hidden />{issueTitle(iss.issue_type)}</div>
+                              {iss.explanation && <p className="block-text">{iss.explanation}</p>}
+                              {iss.suggestion && iss.suggestion !== '-' && <p className="extra-issue-sugg" lang="ru">{iss.suggestion}</p>}
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
 
@@ -635,26 +679,35 @@ function App() {
 
             {(() => {
               const sortedDiagnostics = [...completed].sort((a, b) => a.index - b.index);
-              const passedCount = sortedDiagnostics.filter(d => d.status !== 'flagged').length;
-              const aiCount = sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type === 'ai_generated_suspicion').length;
-              const styleCount = sortedDiagnostics.filter(d => d.status === 'flagged' && d.issue_type !== 'ai_generated_suspicion' && d.issue_type !== 'citation_gap' && d.issue_type !== 'citation_contradiction').length;
-              const sentenceIntegrityCount = sortedDiagnostics.filter(d => d.status === 'flagged' && (d.issue_type === 'citation_gap' || d.issue_type === 'citation_contradiction')).length;
-              const integrityCount = integrityWarnings.length + sentenceIntegrityCount;
-              const tabs = [
-                ['all', '全部', sortedDiagnostics.length + integrityWarnings.length],
-                ['ai', 'AI 特征', aiCount],
-                ['flagged', '文风', styleCount],
-                ['integrity', '引文', integrityCount],
-                ['passed', '通过', passedCount],
-              ] as const;
+              // A sentence can sit under several tabs when it has several findings.
+              const inTab = (d: DiagnosticResult, tab: typeof activeTab) => {
+                if (tab === 'all') return true;
+                if (d.is_bibliography) return false;
+                if (tab === 'unjudged') return isUnjudged(d);
+                if (tab === 'passed') return d.status !== 'flagged' && !isUnjudged(d);
+                if (tab === 'ai') return hasType(d, isAiType);
+                if (tab === 'flagged') return hasType(d, isStyleType);
+                if (tab === 'integrity') return hasType(d, isCitationType);
+                return true;
+              };
+              const count = (tab: typeof activeTab) => sortedDiagnostics.filter(d => inTab(d, tab)).length;
+              const tabs = ([
+                ['all', '全部', sortedDiagnostics.length + integrityWarnings.length, null],
+                ['ai', 'AI 特征', count('ai'), 'issue-ai'],
+                ['flagged', '文风', count('flagged'), 'issue-trans'],
+                ['integrity', '引文', count('integrity') + integrityWarnings.length, 'issue-gap'],
+                ['passed', '通过', count('passed'), 'passed'],
+                ['unjudged', '未判定', count('unjudged'), 'unjudged'],
+              ] as const).filter(([key, , n]) => key !== 'unjudged' || n > 0);
 
               return (
                 <>
                   {file && progress.total > 0 && (
                     <div className="tabs-row">
                       <div className="tabs-container" role="group" aria-label="筛选诊断结果">
-                        {tabs.map(([key, label, count]) => (
+                        {tabs.map(([key, label, count, dot]) => (
                           <button key={key} className={`tab-btn ${activeTab === key ? 'active' : ''}`} aria-pressed={activeTab === key} onClick={() => setActiveTab(key)}>
+                            {dot && <i className={`swatch ${dot}`} aria-hidden />}
                             {label}<span className="tab-count num">{count}</span>
                           </button>
                         ))}
@@ -663,17 +716,12 @@ function App() {
                   )}
 
                   {sortedDiagnostics
-                    .filter(diag => {
-                      if (activeTab === 'all') return true;
-                      if (activeTab === 'passed') return diag.status !== 'flagged';
-                      if (activeTab === 'ai') return diag.status === 'flagged' && diag.issue_type === 'ai_generated_suspicion';
-                      if (activeTab === 'flagged') return diag.status === 'flagged' && diag.issue_type !== 'ai_generated_suspicion' && diag.issue_type !== 'citation_gap' && diag.issue_type !== 'citation_contradiction';
-                      if (activeTab === 'integrity') return diag.status === 'flagged' && (diag.issue_type === 'citation_gap' || diag.issue_type === 'citation_contradiction');
-                      return true;
-                    })
+                    .filter(diag => inTab(diag, activeTab))
                     .map(diag => {
                       const isFlagged = diag.status === 'flagged';
-                      const kind = !isFlagged ? 'tone-good' : isInfraIssue(diag.issue_type) ? 'tone-muted' : `issue-${issueMeta(diag.issue_type).key}`;
+                      const unjudgedCard = isUnjudged(diag);
+                      const kind = diag.is_bibliography || unjudgedCard ? 'tone-muted' : !isFlagged ? 'tone-good' : `issue-${issueMeta(diag.issue_type).key}`;
+                      const extraTypes = issueTypesOf(diag).slice(1);
                       return (
                         <article key={diag.index} className={`diag-card ${kind} ${selectedSentenceIndex === diag.index ? 'is-selected' : ''}`}
                           onClick={() => selectSentence(diag.index, true)}>
@@ -681,10 +729,21 @@ function App() {
                             <span className="diag-index mono">#{String(diag.index + 1).padStart(2, '0')}</span>
                             <span className="diag-title">
                               {isFlagged && <i className={`swatch issue-${issueMeta(diag.issue_type).key}`} aria-hidden />}
-                              {isFlagged ? issueTitle(diag.issue_type) : diag.status === 'early_exit' ? '通过 · 快速判定' : '通过'}
+                              {isFlagged ? issueTitle(diag.issue_type)
+                                : diag.is_bibliography ? '参考文献 · 免检'
+                                : unjudgedCard ? `未判定 · ${issueTitle(diag.issue_type)}`
+                                : diag.status === 'early_exit' ? '通过 · 快速判定' : '通过'}
                             </span>
                             <span className={`diag-ppl num ${pplClass(diag.ppl)}`}>{typeof diag.ppl === 'number' ? `PPL ${diag.ppl}` : 'PPL —'}</span>
                           </div>
+                          {extraTypes.length > 0 && (
+                            <div className="diag-extra">
+                              <span className="diag-extra-label">另有</span>
+                              {extraTypes.map(t => (
+                                <span key={t} className={`tag issue-tag issue-${issueMeta(t).key}`}><i className={`swatch issue-${issueMeta(t).key}`} aria-hidden />{issueTitle(t)}</span>
+                              ))}
+                            </div>
+                          )}
                           <p className="diag-text" lang="ru">{diag.text.length > 140 ? `${diag.text.substring(0, 140)}…` : diag.text}</p>
                           {diag.metrics && (
                             <div className="diag-metrics num">
@@ -695,7 +754,7 @@ function App() {
                               {diag.citation_audit?.length ? <span>引用核验 {diag.citation_audit.length}</span> : null}
                             </div>
                           )}
-                          {isFlagged && diag.explanation && <p className="diag-expl">{diag.explanation}</p>}
+                          {(isFlagged || unjudgedCard) && diag.explanation && <p className="diag-expl">{diag.explanation}</p>}
                           {isFlagged && diag.suggestion && diag.suggestion !== 'N/A' && diag.suggestion !== '-' && (
                             <p className="diag-sugg" lang="ru"><span className="diag-sugg-label">建议</span>{diag.suggestion}</p>
                           )}

@@ -45,7 +45,12 @@ flowchart TB
 4. （可选）`POST /api/upload_references` → 按 `session_id` 缓存 BibTeX、建立 BM25 索引；返回 `bibtex_keys` / `pdf_keys`，分别表示书目信息与已索引全文
 5. `GET /api/diagnose?session_id=` → SSE：
    - `init`：`{total_sentences, discipline, nlp_backend, calibration}`；`calibration` 为本学科实际使用的阈值 `{ppl_low, ppl_high, nv_ratio_max, passive_max}`（来自 `calibration_config.json`，缺省 15 / 80 / 4.5）
-   - `result`：每句一条（引文完整性全局告警用负数 index 先推送）
+   - `result`：每句一条（引文完整性全局告警用负数 index 先推送）。RS-0020 起新增（只增字段）：
+     - `is_bibliography`：文末参考文献条目，免检，且不计入任何统计与风险分数；
+     - `issues`：本句全部问题 `[{issue_type, severity, explanation, suggestion}]`，`issue_type` 等字段仍是第一个（主）问题；
+     - `judge_error`：判定接口或模型失败，本句**未判定**（`status` 仍为 `passed` 以兼容旧客户端）；
+     - `ppl_basis`：`sentence` 为整句困惑度，`prefix` 为快速判定时只看前 6 个词元的估计值。
+   - 风险分数（`*_risk`）只统计正文句；无困惑度时 `predictability_risk` 为"已判定正文句中需修改的占比"
    - `done`：汇总
    - `error`
 6. 单句处理顺序：参考文献区免检 → 本地文献相似度 → 翻译腔规则 → PPL（早退出）→ 可疑则调用判定器（上下文 ±2 句 + 学科规则）→ 低 PPL 一票否决 → NLI 引文审计覆盖结果
