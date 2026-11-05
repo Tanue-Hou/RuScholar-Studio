@@ -246,3 +246,77 @@ def test_init_event_carries_discipline_calibration():
     assert ev["event"] == "init"
     assert data["calibration"]["ppl_low"] == calib.get("ppl_low", 15.0)
     assert data["calibration"]["nv_ratio_max"] == calib.get("nv_ratio_max", 4.5)
+
+
+# ---------- RS-0020: data the UI relies on ----------
+
+_BODY_AND_BIB = (
+    "Важно отметить, что предложенная модель является новой и эффективной. "
+    "Обеспечение координации распределения сил управления подсистем шасси осуществляется посредством реализации алгоритма. "
+    "Студенты читают книгу каждый вечер в библиотеке университета. "
+    "Результаты были получены и были проанализированы авторами. \n"
+    "Список литературы\n1. Иванов И.И. Сцепление шин. М.: Наука, 2019.\n2. Petrov P. Dynamics. 2020.\n"
+)
+
+
+def _cloud_events(judge_side_effect):
+    from naturalization_layer.llm_judge import StyleJudge
+    from services.diagnostic_service import run_sentence_diagnose_stream
+
+    async def run():
+        out = []
+        with patch("naturalization_layer.llm_judge.call_openai_compatible", side_effect=judge_side_effect), \
+             patch("services.citation_audit_service.fetch_openalex_abstract", return_value=None):
+            async for ev in run_sentence_diagnose_stream(_BODY_AND_BIB, "rs0020", "cloud-pro", "", "", "SCI_TECH",
+                                                         None, StyleJudge(None), None):
+                out.append((ev["event"], json.loads(ev["data"])))
+        return out
+    return asyncio.run(run())
+
+
+def test_bibliography_is_marked_and_excluded_from_risks():
+    multi = json.dumps({"issues": [
+        {"issue_type": "machine_translation_cliche", "severity": "high", "explanation_zh": "a", "rewrite_suggestion": "x"},
+    ]})
+    events = _cloud_events(lambda *a, **k: multi)
+    results = [d for e, d in events if e == "result" and d["index"] >= 0]
+    body = [r for r in results if not r["is_bibliography"]]
+    bib = [r for r in results if r["is_bibliography"]]
+    assert len(body) == 4 and len(bib) >= 2
+    done = [d for e, d in events if e == "done"][0]
+    # All 4 body sentences are flagged; in cloud mode predictability falls back
+    # to the flagged share, which must be over body sentences only (was 40%).
+    assert done["predictability_risk"] == 100.0
+
+
+def test_all_judge_issues_are_kept():
+    multi = json.dumps({"issues": [
+        {"issue_type": "machine_translation_cliche", "severity": "high", "explanation_zh": "a", "rewrite_suggestion": "x"},
+        {"issue_type": "ai_generated_suspicion", "severity": "high", "explanation_zh": "b", "rewrite_suggestion": "y"},
+    ]})
+    events = _cloud_events(lambda *a, **k: multi)
+    first = [d for e, d in events if e == "result" and d["index"] == 0][0]
+    assert first["issue_type"] == "machine_translation_cliche"  # primary unchanged
+    assert [i["issue_type"] for i in first["issues"]] == ["machine_translation_cliche", "ai_generated_suspicion"]
+
+
+def test_judge_failure_is_marked_not_assessed():
+    events = _cloud_events(RuntimeError("401 Unauthorized"))
+    body = [d for e, d in events if e == "result" and d["index"] >= 0 and not d["is_bibliography"]]
+    assert body and all(r["judge_error"] and r["status"] == "passed" and r["issues"] == [] for r in body)
+    # Nothing was judged, so the flagged-share fallback has nothing to report.
+    done = [d for e, d in events if e == "done"][0]
+    assert done["predictability_risk"] == 0.0
+
+
+def test_local_early_exit_ppl_is_marked_prefix():
+    from services.diagnostic_service import run_sentence_diagnose_batch
+
+    class Engine:
+        llm = None
+        def evaluate_sentence_ppl(self, s, ee_tokens, lo, hi):
+            return 40.0, bool(ee_tokens)
+
+    res = asyncio.run(run_sentence_diagnose_batch(
+        "Студенты читают книгу.", "rs0020-ee", "local", "", "", "UNIVERSAL", Engine(), MagicMock(), None))
+    assert res[0]["status"] == "early_exit" and res[0]["ppl_basis"] == "prefix"

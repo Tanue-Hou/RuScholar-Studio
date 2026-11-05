@@ -49,6 +49,8 @@ def _bibliography_result(idx: int, text_str: str) -> dict:
         "suggestion": "无需修改。",
         "think": "【参考文献免检】该句位于参考文献著录区域，跳过诊断以避免格式误触AI率及风格警报。",
         "status": "passed",
+        "is_bibliography": True,
+        "issues": [],
         "metrics": _empty_metrics()
     }
 
@@ -58,6 +60,16 @@ def _base_result(idx: int, text_str: str, diag_rules: dict) -> dict:
         "index": idx,
         "text": text_str,
         "ppl": None,
+        # "sentence" = full-sentence PPL; "prefix" = early-exit estimate from the
+        # first tokens only (not comparable with full-sentence values).
+        "ppl_basis": None,
+        "is_bibliography": False,
+        # Every finding for this sentence; issue_type/explanation/suggestion
+        # above stay the primary (first) one for older consumers.
+        "issues": [],
+        # True when the judge (cloud API / local model) failed: the sentence was
+        # NOT assessed, even though status stays "passed" for compatibility.
+        "judge_error": False,
         "issue_type": None,
         "severity": None,
         "explanation": None,
@@ -99,6 +111,8 @@ def _apply_citation_gap(res: dict, sim_warning: dict) -> None:
     res["severity"] = "high"
     res["explanation"] = sim_warning["explanation_zh"]
     res["suggestion"] = sim_warning["rewrite_suggestion"]
+    res["issues"] = [{"issue_type": "citation_gap", "severity": "high",
+                      "explanation": res["explanation"], "suggestion": res["suggestion"]}]
     res["think"] = (
         f"【学术改写与引用合规风险】该句与本地文献记录《{sim_warning['evidence']}》"
         f"的表达重合度高，且在此处缺少参考文献引标，触发『引用缺口 (Citation Gap)』警告，请补充对应标注。"
@@ -119,6 +133,15 @@ def _apply_rules_pass(res: dict) -> None:
         f"【规则通过】句子未触发生感官低 PPL 警报，亦无学术套话、拖沓修饰长链。"
         f"名词动词比率（{res['metrics']['nv_ratio']}）处于健康带，语态逻辑清晰，通过风格初筛。"
     )
+
+
+def _issue_entry(issue: dict) -> dict:
+    return {
+        "issue_type": issue.get("issue_type", "") or "",
+        "severity": issue.get("severity", "") or "",
+        "explanation": issue.get("explanation_zh", "") or "",
+        "suggestion": issue.get("rewrite_suggestion", "") or "",
+    }
 
 
 def _apply_judgement(res: dict, diag: dict, text_str: str, ppl_low: float) -> None:
@@ -148,8 +171,11 @@ def _apply_judgement(res: dict, diag: dict, text_str: str, ppl_low: float) -> No
         # Infrastructure failures are not findings about the text.
         if res["issue_type"] in ("api_request_error", "json_parse_error"):
             res["status"] = "passed"
+            res["judge_error"] = True
         else:
             res["status"] = "flagged"
+            res["issues"] = [_issue_entry(i) for i in issues
+                             if i.get("issue_type") not in ("api_request_error", "json_parse_error")]
         if not res["think"]:
             res["think"] = f"【专家模型判定】深度扫描检测到可疑特征：{res['explanation']}"
     else:
@@ -172,6 +198,11 @@ def _apply_citation_audits(res: dict, audits: list) -> None:
         res["explanation"] = f"引用核验警告：文献《{first_un['title']}》对文中论点支撑不足或存在逻辑冲突。大模型核验结论：{first_un['explanation_zh']}"
         res["suggestion"] = "请重新检查该引言与文献的逻辑对应关系，补充原文强支撑片段，或更换更切合的参考文献。"
         res["think"] = f"【引用文献逻辑校验异常】引用的文献《{first_un['title']}》分析发现风险：{first_un['explanation_zh']}"
+        # The citation finding becomes primary; earlier style/AI findings stay listed.
+        citation_issue = {"issue_type": res["issue_type"], "severity": "high",
+                          "explanation": res["explanation"], "suggestion": res["suggestion"]}
+        res["issues"] = [citation_issue] + [i for i in res.get("issues", [])
+                                            if i["issue_type"] != citation_issue["issue_type"]]
 
 
 class _RunningRisks:
@@ -187,8 +218,15 @@ class _RunningRisks:
         self.word_counts = []
         self.connectors_counts = []
         self.flagged_count = 0
+        self.count = 0  # body sentences (bibliography entries excluded)
+        self.unjudged = 0  # body sentences whose judge call failed
 
     def add(self, result: dict) -> None:
+        # Bibliography entries are not prose: counting them (all-zero metrics)
+        # diluted every document-level risk.
+        if result.get("is_bibliography"):
+            return
+        self.count += 1
         m = result["metrics"]
         self.ppl_vals.append(result["ppl"])
         self.nv_ratios.append(m["nv_ratio"])
@@ -199,10 +237,14 @@ class _RunningRisks:
         self.connectors_counts.append(m["connectors_count"])
         if result["status"] == "flagged":
             self.flagged_count += 1
+        if result.get("judge_error"):
+            self.unjudged += 1
 
-    def risks(self, n_sentences: int) -> dict:
+    def risks(self) -> dict:
+        # Without PPL, predictability falls back to the flagged share, which must
+        # be over sentences that were actually judged.
         pred, unif = calculate_style_risks(
-            self.ppl_vals, self.flagged_count, n_sentences, self.calib, word_counts=self.word_counts
+            self.ppl_vals, self.flagged_count, self.count - self.unjudged, self.calib, word_counts=self.word_counts
         )
         return {
             "predictability_risk": pred,
@@ -326,6 +368,7 @@ async def run_sentence_diagnose_stream(
                     engine_inst.evaluate_sentence_ppl, text_str, ee_tokens, ee_lower, ee_upper
                 )
                 res["ppl"] = round(ppl, 2) if ppl else None
+                res["ppl_basis"] = ("prefix" if was_early_exited else "sentence") if res["ppl"] is not None else None
                 is_suspicious = ppl < ppl_low or ppl > ppl_high or has_track_a_triggers
             else:
                 is_suspicious = has_track_a_triggers
@@ -347,6 +390,7 @@ async def run_sentence_diagnose_stream(
                         engine_inst.evaluate_sentence_ppl, text_str, 0, 0.0, float('inf')
                     )
                     res["ppl"] = round(ppl, 2) if ppl else None
+                    res["ppl_basis"] = "sentence" if res["ppl"] is not None else None
                 await diagnose_with_judge(idx, text_str, diag_rules, res)
 
         if session_id in session_references and citation_judge:
@@ -366,11 +410,11 @@ async def run_sentence_diagnose_stream(
         )
         for result in batch_results:
             running.add(result)
-            result.update(running.risks(result["index"] + 1))
+            result.update(running.risks())
             yield {"event": "result", "data": json.dumps(result)}
         await asyncio.sleep(0.01)
 
-    yield {"event": "done", "data": json.dumps(running.risks(len(sentences)))}
+    yield {"event": "done", "data": json.dumps(running.risks())}
 
 
 async def run_sentence_diagnose_batch(

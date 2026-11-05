@@ -46,6 +46,21 @@ export interface DiagnosticResult extends Partial<RiskScores> {
   status: SentenceStatus;
   metrics?: SentenceMetrics | null;
   citation_audit?: CitationAudit[];
+  /** Bibliography entry: not prose, excluded from every statistic. */
+  is_bibliography?: boolean;
+  /** All findings for the sentence; issue_type above is the primary one. */
+  issues?: IssueEntry[];
+  /** The judge failed (API/model error): the sentence was not assessed. */
+  judge_error?: boolean;
+  /** "prefix" = early-exit estimate from the first tokens only. */
+  ppl_basis?: 'sentence' | 'prefix' | null;
+}
+
+export interface IssueEntry {
+  issue_type: string;
+  severity: string;
+  explanation: string;
+  suggestion: string;
 }
 
 /** Thresholds the backend applied for the detected discipline (calibration_config.json). */

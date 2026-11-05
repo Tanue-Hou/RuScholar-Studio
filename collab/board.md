@@ -16,6 +16,7 @@
 | [RS-0007](tasks/RS-0007-frontend-modularize.md) | 前端 App.tsx 拆分 | 待办 | 建议 antigravity | — |
 | [RS-0018](tasks/RS-0018-ui-refine.md) | 原界面去 AI 味、苹果式质感、问题分色、补充学科阈值/困惑度分布/词法汇总 | 已合入 main（[PR #2](https://github.com/Tanue-Hou/RuScholar-Studio/pull/2)，8dfd259），待 Owner 验收 Mac 字体与真实 Qwen | claude@cloud | RS-0017 |
 | [RS-0019](tasks/RS-0019-bright-ui-and-review.md) | 整体代码审查（1 高 4 中 3 低，待决定修复）+ 明快配色 | 待验收 | claude@cloud | RS-0018 |
+| [RS-0020](tasks/RS-0020-data-correctness.md) | 前端数据口径修正：参考文献计入分母、只保留首个问题、接口失败显示为通过等 6 处 | 待验收 | claude@cloud | RS-0019 |
 
 ## P2
 | 任务 | 内容 | 状态 | 负责 | 依赖 |

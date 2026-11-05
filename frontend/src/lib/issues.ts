@@ -38,6 +38,9 @@ export const ISSUE_ORDER = Object.keys(ISSUES);
 export function issueMeta(type: string | null | undefined): IssueMeta {
   if (type && ISSUES[type]) return ISSUES[type];
   if (type && INFRA[type]) return { ...OTHER, title: INFRA[type] };
+  // An issue type the UI does not know yet: show the model's own label rather
+  // than a generic one, so nothing is silently renamed.
+  if (type && type !== 'unknown') return { ...OTHER, title: `其他：${type}` };
   return OTHER;
 }
 

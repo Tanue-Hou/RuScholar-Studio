@@ -2,6 +2,22 @@
 // backend already sends; nothing is estimated or invented on the client.
 import type { Calibration, DiagnosticResult } from '../types';
 
+const INFRA_TYPES = new Set(['api_request_error', 'json_parse_error']);
+
+/** Prose sentences only: bibliography entries are not assessed and must not dilute statistics. */
+export const bodyOf = (results: DiagnosticResult[]) => results.filter(r => !r.is_bibliography);
+
+/** The judge failed for this sentence, so it was not assessed (not a pass). */
+export const isUnjudged = (r: DiagnosticResult) =>
+  r.status !== 'flagged' && (!!r.judge_error || INFRA_TYPES.has(r.issue_type ?? ''));
+
+/** Issue types found in a flagged sentence (all of them, primary first). */
+export function issueTypesOf(r: DiagnosticResult): string[] {
+  if (r.status !== 'flagged') return [];
+  const list = r.issues?.length ? r.issues.map(i => i.issue_type) : [r.issue_type ?? 'unknown'];
+  return [...new Set(list.filter(Boolean))];
+}
+
 export const DEFAULT_CALIBRATION: Calibration = { ppl_low: 15, ppl_high: 80, nv_ratio_max: 4.5, passive_max: null };
 
 export interface DocumentStats {
@@ -18,6 +34,8 @@ export function documentStats(text: string): DocumentStats {
 
 export interface PplStats {
   count: number;
+  /** How many of the values are early-exit prefix estimates. */
+  prefix: number;
   mean: number | null;
   median: number | null;
   min: number | null;
@@ -27,12 +45,15 @@ export interface PplStats {
 }
 
 export function pplStats(results: DiagnosticResult[], calib: Calibration): PplStats {
-  const values = results.map(r => r.ppl).filter((p): p is number => typeof p === 'number' && Number.isFinite(p));
-  if (!values.length) return { count: 0, mean: null, median: null, min: null, max: null, belowLow: 0, aboveHigh: 0 };
+  const withPpl = bodyOf(results).filter(r => typeof r.ppl === 'number' && Number.isFinite(r.ppl));
+  const values = withPpl.map(r => r.ppl as number);
+  const prefix = withPpl.filter(r => r.ppl_basis === 'prefix').length;
+  if (!values.length) return { count: 0, prefix: 0, mean: null, median: null, min: null, max: null, belowLow: 0, aboveHigh: 0 };
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return {
     count: values.length,
+    prefix,
     mean: values.reduce((a, b) => a + b, 0) / values.length,
     median: sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2,
     min: sorted[0],
@@ -53,7 +74,7 @@ export interface LexicalTotals {
 }
 
 export function lexicalTotals(results: DiagnosticResult[], calib: Calibration): LexicalTotals {
-  const withMetrics = results.filter(r => r.metrics);
+  const withMetrics = bodyOf(results).filter(r => r.metrics);
   const sum = (f: (r: DiagnosticResult) => number) => withMetrics.reduce((a, r) => a + f(r), 0);
   return {
     sentences: withMetrics.length,
@@ -66,13 +87,15 @@ export function lexicalTotals(results: DiagnosticResult[], calib: Calibration): 
   };
 }
 
-/** Flagged sentences per issue type, most frequent first. */
+/**
+ * Sentences per issue type, most frequent first. A sentence with several
+ * findings counts once under each of its types (it used to count only under
+ * its first, which hid e.g. AI features behind translationese).
+ */
 export function issueBreakdown(results: DiagnosticResult[]): { type: string; count: number }[] {
   const counts = new Map<string, number>();
-  for (const r of results) {
-    if (r.status !== 'flagged') continue;
-    const key = r.issue_type || 'unknown';
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+  for (const r of bodyOf(results)) {
+    for (const key of issueTypesOf(r)) counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return [...counts.entries()].map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count);
 }
